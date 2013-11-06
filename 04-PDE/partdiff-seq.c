@@ -225,7 +225,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		maxresiduum = 0;
 
 		/* over all rows */
-		#pragma omp parallel for //funktioniert nicht. Wieso?
+		#pragma omp parallel for private(i,j,star,residuum)//funktioniert nicht. Wieso?
 		for (i = 1; i < N; i++)
 		{
 			double fpisin_i = 0.0;
@@ -249,7 +249,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				{
 					residuum = Matrix_In[i][j] - star;
 					residuum = (residuum < 0) ? -residuum : residuum;
-					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
+					#pragma omp critical
+					{
+						maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
+					}
 				}
 
 				Matrix_Out[i][j] = star;
