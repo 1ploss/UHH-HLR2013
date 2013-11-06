@@ -224,8 +224,9 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 		maxresiduum = 0;
 
+		omp_set_num_threads(options->number);
 		/* over all rows */
-		#pragma omp parallel for private(i,j,star,residuum)//funktioniert nicht. Wieso?
+		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum) //funktioniert nicht. Wieso?
 		for (i = 1; i < N; i++)
 		{
 			double fpisin_i = 0.0;
