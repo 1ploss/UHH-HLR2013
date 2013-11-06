@@ -217,6 +217,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		fpisin = 0.25 * TWO_PI_SQUARE * h * h;
 	}
 
+	//Hier setze ich die Anzahl zu nutzender Threads
+	omp_set_num_threads(options->number);
+
+
 	while (term_iteration > 0)
 	{
 		double** Matrix_Out = arguments->Matrix[m1];
@@ -224,9 +228,9 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 		maxresiduum = 0;
 
-		omp_set_num_threads(options->number);
+		
 		/* over all rows */
-		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum) //funktioniert nicht. Wieso?
+		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
 		{
 			double fpisin_i = 0.0;
