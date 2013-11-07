@@ -79,6 +79,12 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
+#define VERSION 1
+#ifdef VERSION
+#include <omp.h>
+#define ARRAY_SIZE(a) (sizeof (a) / sizeof (a[0]))
+static unsigned scheduling_types[] = {omp_sched_static, omp_sched_dynamic, omp_sched_guided, omp_sched_auto};
+#endif
 
 #include "partdiff-seq.h"
 
@@ -160,6 +166,7 @@ void
 AskParams (struct options* options, int argc, char** argv)
 {
 	int ret;
+	unsigned scheduling, chunk_size = 0;
 
 	printf("============================================================\n");
 	printf("Program for calculation of partial differential equations.  \n");
@@ -235,7 +242,31 @@ AskParams (struct options* options, int argc, char** argv)
 			while (getchar() != '\n');
 		}
 		while (ret != 1 || !check_termination(options));
+#ifdef VERSION
+		do
+		{
+			printf("\n");
+			printf("Select openmp scheduling 0 - static, 1 - dynamic, 2 - guided, 3 - auto:\n");
+			printf("Number> ");
+			fflush(stdout);
+			ret = scanf("%u", &scheduling);
+			while (getchar() != '\n');
+		}
+		while (ret != 1 || scheduling > 3);
 
+		do
+		{
+			printf("\n");
+			printf("Select openmp chunk size:\n");
+			printf("Number> ");
+			fflush(stdout);
+			ret = scanf("%u", &chunk_size);
+			while (getchar() != '\n');
+		}
+		while (ret != 1 || chunk_size == 0);
+
+		omp_set_schedule(scheduling_types[scheduling], chunk_size);
+#endif
 		if (options->termination == TERM_PREC)
 		{
 			do
@@ -271,7 +302,7 @@ AskParams (struct options* options, int argc, char** argv)
 	}
 	else
 	{
-		if (argc < 7 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "-?") == 0)
+		if (argc < 9 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "-?") == 0)
 		{
 			usage(argv[0]);
 			exit(0);
@@ -316,6 +347,26 @@ AskParams (struct options* options, int argc, char** argv)
 			usage(argv[0]);
 			exit(1);
 		}
+
+#ifdef VERSION
+		ret = sscanf(argv[6], "%u", &scheduling);
+
+		if (ret != 1 || scheduling > 3)
+		{
+			usage(argv[0]);
+			exit(1);
+		}
+
+		ret = sscanf(argv[7], "%u", &chunk_size);
+
+		if (ret != 1 || chunk_size == 0)
+		{
+			usage(argv[0]);
+			exit(1);
+		}
+
+		omp_set_schedule(scheduling_types[scheduling], chunk_size);
+#endif
 
 		if (options->termination == TERM_PREC)
 		{
