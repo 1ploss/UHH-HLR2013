@@ -3,20 +3,28 @@ CC = gcc
 
 # Compiler flags, paths and libraries
 CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2 -ggdb -fopenmp
-LFLAGS = $(CFLAGS)
+LDFLAGS = $(CFLAGS)
 LIBS   = -lm
-
 OBJS = partdiff-seq.o askparams.o
+PROGS = partdiff-seq partdiff-openmp-element partdiff-openmp-spalten partdiff-openmp-zeilen
+
+all: $(PROGS)
 
 # Rule to create *.o from *.c
-.c.o:
-	$(CC) -c $(CFLAGS) $*.c
+%.o : %.c %.h Makefile
+	$(CC) -c $(CFLAGS) -o $@ $*.c
 
-# Targets ...
-all: partdiff-seq
+partdiff-openmp-element.o: partdiff-seq.c
+	$(CC) -c $(CFLAGS) -o $@ -DVERSION=element partdiff-seq.c
 
-partdiff-seq: $(OBJS) Makefile
-	$(CC) $(LFLAGS) -o $@ $(OBJS) $(LIBS)
+partdiff-openmp-spalten.o: partdiff-seq.c
+	$(CC) -c $(CFLAGS) -o $@ -DVERSION=zeilen partdiff-seq.c
+
+partdiff-openmp-zeilen.o: partdiff-seq.c
+	$(CC) -c $(CFLAGS) -o $@ -DVERSION=spalten partdiff-seq.c
+
+$(PROGS): % : %.o askparams.o
+	$(CC) $(LDFLAGS) -o $@ $@.o askparams.o $(LIBS)
 
 clean:
 	$(RM) *.o *~
