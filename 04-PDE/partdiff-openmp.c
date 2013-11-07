@@ -29,10 +29,13 @@
 #include <sys/time.h>
 
 #include "partdiff-seq.h"
+/*Die folgenden Macros funktionieren nicht, da ich zu wenig Erfahrung mit Macros hab. Entweder wir ersetzen sie durch eine bessere
+  Variante, unterschiedliche Programmversionen durch -D beim Compilieren zu erzeugen, oder wir bringen sie zum laufen.
+*/
 //WENN VERSION == omp wird die äußere Paralelisierung gesetzt. Ansonsten ist das Program seriell
 #if VERSION == omp
   #define SETNUMBER omp_set_num_threads(options->number);
-  #define OUTERFOR #pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
+  #define OUTERFOR pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 #else
   #define SETNUMBER
   #define OUTERFOR
@@ -168,7 +171,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 	uint64_t const N = arguments->N;
 
-	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
+	//arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
 
 	for (i = 0; i < arguments->num_matrices; i++)
@@ -177,8 +180,8 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 		for (j = 0; j <= N; j++)
 		{
-			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
-		}
+			arguments->Matrix[i][j] = allocateMemory((N + 1) * sizeof(double*));//arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
+		}//Speicher zeilenweise alloziert, um zu testen, ob das gegenüber der Blockallozierung vorteile bringt
 	}
 }
 
@@ -278,7 +281,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 		
 		/* over all columns */
-		OUTERFOR
+		#OUTERFOR
 		for (INDEX1 = 1; INDEX1 < N; INDEX1++)
 		{
 			double fpisin_i = 0.0;
