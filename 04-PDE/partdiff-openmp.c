@@ -133,11 +133,16 @@ freeMatrices (struct calculation_arguments* arguments)
 
 	for (i = 0; i < arguments->num_matrices; i++)
 	{
+		//Änderungen an der Allozierung auch bei der Befreiung beachten:
+		for(j = 0; j < arguments->num_matrices; j++)
+		{
+			free(arguments->Matrix[i][j]);
+		}
 		free(arguments->Matrix[i]);
 	}
 
 	free(arguments->Matrix);
-	free(arguments->M);
+	//free(arguments->M);
 }
 
 /* ************************************************************************ */
