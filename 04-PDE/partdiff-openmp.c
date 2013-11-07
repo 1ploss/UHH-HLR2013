@@ -130,6 +130,7 @@ void
 freeMatrices (struct calculation_arguments* arguments)
 {
 	uint64_t i;
+	uint64_t j;
 
 	for (i = 0; i < arguments->num_matrices; i++)
 	{
