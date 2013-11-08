@@ -286,7 +286,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 #elif (PARVER == 1) /* element */
 		double fpisin_i = 0.0;
 		/* over all rows */
-		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(fpisin_i,i,j,star,residuum)
+		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum) firstprivate(fpisin_i)
 		for (i = 1; i < N; i++)
 		{
 
