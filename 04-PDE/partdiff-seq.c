@@ -146,7 +146,6 @@ allocateMatrices (struct calculation_arguments* arguments)
 			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
 #else
 			arguments->Matrix[i][j] = allocateMemory((N + 1) * sizeof(double*));
-			printf("test");
 #endif
 
 		}

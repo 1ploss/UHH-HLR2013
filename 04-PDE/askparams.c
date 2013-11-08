@@ -387,7 +387,7 @@ AskParams (struct options* options, int argc, char** argv)
 		}
 
 #if (PARVER > 0)
-		ret = sscanf(argv[6], "%u", &scheduling);
+		ret = sscanf(argv[7], "%u", &scheduling);
 
 		if (ret != 1 || scheduling > 3)
 		{
@@ -395,7 +395,7 @@ AskParams (struct options* options, int argc, char** argv)
 			exit(1);
 		}
 
-		ret = sscanf(argv[7], "%u", &chunk_size);
+		ret = sscanf(argv[8], "%u", &chunk_size);
 
 		if (ret != 1 || chunk_size == 0)
 		{
