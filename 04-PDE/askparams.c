@@ -255,31 +255,7 @@ AskParams (struct options* options, int argc, char** argv)
 			while (getchar() != '\n');
 		}
 		while (ret != 1 || !check_termination(options));
-#if (PARVER > 0)
-		do
-		{
-			printf("\n");
-			printf("Select openmp scheduling 0 - static, 1 - dynamic, 2 - guided, 3 - auto:\n");
-			printf("Number> ");
-			fflush(stdout);
-			ret = scanf("%u", &scheduling);
-			while (getchar() != '\n');
-		}
-		while (ret != 1 || scheduling > 3);
 
-		do
-		{
-			printf("\n");
-			printf("Select openmp chunk size:\n");
-			printf("Number> ");
-			fflush(stdout);
-			ret = scanf("%u", &chunk_size);
-			while (getchar() != '\n');
-		}
-		while (ret != 1 || chunk_size == 0);
-
-		omp_set_schedule(scheduling_types[scheduling], chunk_size);
-#endif
 		if (options->termination == TERM_PREC)
 		{
 			do
@@ -312,6 +288,32 @@ AskParams (struct options* options, int argc, char** argv)
 
 			options->term_precision = 0;
 		}
+
+#if (PARVER > 0)
+		do
+		{
+			printf("\n");
+			printf("Select openmp scheduling 0 - static, 1 - dynamic, 2 - guided, 3 - auto:\n");
+			printf("Number> ");
+			fflush(stdout);
+			ret = scanf("%u", &scheduling);
+			while (getchar() != '\n');
+		}
+		while (ret != 1 || scheduling > 3);
+
+		do
+		{
+			printf("\n");
+			printf("Select openmp chunk size:\n");
+			printf("Number> ");
+			fflush(stdout);
+			ret = scanf("%u", &chunk_size);
+			while (getchar() != '\n');
+		}
+		while (ret != 1 || chunk_size == 0);
+
+		omp_set_schedule(scheduling_types[scheduling], chunk_size);
+#endif
 	}
 	else
 	{
@@ -361,26 +363,6 @@ AskParams (struct options* options, int argc, char** argv)
 			exit(1);
 		}
 
-#if (PARVER > 0)
-		ret = sscanf(argv[6], "%u", &scheduling);
-
-		if (ret != 1 || scheduling > 3)
-		{
-			usage(argv[0]);
-			exit(1);
-		}
-
-		ret = sscanf(argv[7], "%u", &chunk_size);
-
-		if (ret != 1 || chunk_size == 0)
-		{
-			usage(argv[0]);
-			exit(1);
-		}
-
-		omp_set_schedule(scheduling_types[scheduling], chunk_size);
-#endif
-
 		if (options->termination == TERM_PREC)
 		{
 			ret = sscanf(argv[6], "%lf", &(options->term_precision));
@@ -403,5 +385,25 @@ AskParams (struct options* options, int argc, char** argv)
 				exit(1);
 			}
 		}
+
+#if (PARVER > 0)
+		ret = sscanf(argv[6], "%u", &scheduling);
+
+		if (ret != 1 || scheduling > 3)
+		{
+			usage(argv[0]);
+			exit(1);
+		}
+
+		ret = sscanf(argv[7], "%u", &chunk_size);
+
+		if (ret != 1 || chunk_size == 0)
+		{
+			usage(argv[0]);
+			exit(1);
+		}
+
+		omp_set_schedule(scheduling_types[scheduling], chunk_size);
+#endif
 	}
 }
