@@ -29,6 +29,7 @@
 #include <sys/time.h>
 #include <omp.h>
 #include "partdiff-seq.h"
+#define MAX(a, b) ((a > b) ? (a) : (b))
 
 struct calculation_arguments
 {
@@ -216,21 +217,21 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		pih = PI * h;
 		fpisin = 0.25 * TWO_PI_SQUARE * h * h;
 	}
-
+//#define PAR_VERSION 1
+#ifdef PAR_VERSION
 	//Hier setze ich die Anzahl zu nutzender Threads
 	omp_set_num_threads(options->number);
-
-
+	int num_threads = omp_get_num_threads();
+	double* maxresiduum_per_thread = calloc(options->number, sizeof(double));
+#endif
 	while (term_iteration > 0)
 	{
 		double** Matrix_Out = arguments->Matrix[m1];
 		double** Matrix_In  = arguments->Matrix[m2];
 
 		maxresiduum = 0;
-
-		
+#ifndef PAR_VERSION /* seq */
 		/* over all rows */
-		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
 		{
 			double fpisin_i = 0.0;
@@ -263,7 +264,113 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				Matrix_Out[i][j] = star;
 			}
 		}
+#elif (PAR_VERSION == 1) /* element */
+		/* over all rows */
+		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
+		for (i = 1; i < N; i++)
+		{
+			for (j = 1; j < N; j++) /* over all columns */
+			{
+				double fpisin_i = 0.0;
 
+				if (options->inf_func == FUNC_FPISIN)
+				{
+					fpisin_i = fpisin * sin(pih * (double)i);
+				}
+
+				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+
+				if (options->inf_func == FUNC_FPISIN)
+				{
+					star += fpisin_i * sin(pih * (double)j);
+				}
+
+				if (options->termination == TERM_PREC || term_iteration == 1)
+				{
+					residuum = Matrix_In[i][j] - star;
+					residuum = (residuum < 0) ? -residuum : residuum;
+					int t = omp_get_thread_num();
+					maxresiduum_per_thread[t] = MAX(maxresiduum_per_thread[t], residuum);
+				}
+
+				Matrix_Out[i][j] = star;
+			}
+		}
+#elif (PAR_VERSION == 2) /* spalten */
+		/* over all rows */
+		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
+		for (i = 1; i < N; i++)
+		{
+			double fpisin_i = 0.0;
+
+			if (options->inf_func == FUNC_FPISIN)
+			{
+				fpisin_i = fpisin * sin(pih * (double)i);
+			}
+
+			/* over all columns */
+			for (j = 1; j < N; j++)
+			{
+				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+
+				if (options->inf_func == FUNC_FPISIN)
+				{
+					star += fpisin_i * sin(pih * (double)j);
+				}
+
+				if (options->termination == TERM_PREC || term_iteration == 1)
+				{
+					residuum = Matrix_In[i][j] - star;
+					residuum = (residuum < 0) ? -residuum : residuum;
+					int t = omp_get_thread_num();
+					maxresiduum_per_thread[t] = MAX(maxresiduum_per_thread[t], residuum);
+				}
+
+				Matrix_Out[i][j] = star;
+			}
+		}
+#elif (PAR_VERSION == 3) /* zeilen */
+		/* over all rows */
+		for (i = 1; i < N; i++)
+		{
+			double fpisin_i = 0.0;
+
+			if (options->inf_func == FUNC_FPISIN)
+			{
+				fpisin_i = fpisin * sin(pih * (double)i);
+			}
+
+			/* over all columns */
+			#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(j, star,residuum)
+			for (j = 1; j < N; j++)
+			{
+				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+
+				if (options->inf_func == FUNC_FPISIN)
+				{
+					star += fpisin_i * sin(pih * (double)j);
+				}
+
+				if (options->termination == TERM_PREC || term_iteration == 1)
+				{
+					residuum = Matrix_In[i][j] - star;
+					residuum = (residuum < 0) ? -residuum : residuum;
+					int t = omp_get_thread_num();
+					maxresiduum_per_thread[t] = MAX(maxresiduum_per_thread[t], residuum);
+				}
+
+				Matrix_Out[i][j] = star;
+			}
+		}
+#endif
+
+#ifdef PAR_VERSION
+		/* I assume options->number < INT_MAX (~2e9) */
+		for (i = 0; i < num_threads; i++)
+		{
+			maxresiduum = MAX(maxresiduum, maxresiduum_per_thread[i]);
+		}
+#endif
 		results->stat_iteration++;
 		results->stat_precision = maxresiduum;
 
@@ -287,6 +394,9 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	}
 
 	results->m = m2;
+#ifdef PAR_VERSION
+	free (maxresiduum_per_thread);
+#endif
 }
 
 /* ************************************************************************ */

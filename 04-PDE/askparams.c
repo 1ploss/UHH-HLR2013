@@ -79,8 +79,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#define VERSION 1
-#ifdef VERSION
+#ifdef PAR_VERSION
 #include <omp.h>
 #define ARRAY_SIZE(a) (sizeof (a) / sizeof (a[0]))
 static unsigned scheduling_types[] = {omp_sched_static, omp_sched_dynamic, omp_sched_guided, omp_sched_auto};
@@ -242,7 +241,7 @@ AskParams (struct options* options, int argc, char** argv)
 			while (getchar() != '\n');
 		}
 		while (ret != 1 || !check_termination(options));
-#ifdef VERSION
+#ifdef PAR_VERSION
 		do
 		{
 			printf("\n");
@@ -348,7 +347,7 @@ AskParams (struct options* options, int argc, char** argv)
 			exit(1);
 		}
 
-#ifdef VERSION
+#ifdef PAR_VERSION
 		ret = sscanf(argv[6], "%u", &scheduling);
 
 		if (ret != 1 || scheduling > 3)

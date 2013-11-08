@@ -15,13 +15,13 @@ all: $(PROGS)
 	$(CC) -c $(CFLAGS) -o $@ $*.c
 
 partdiff-openmp-element.o: partdiff-seq.c
-	$(CC) -c $(CFLAGS) -o $@ -DVERSION=element partdiff-seq.c
+	$(CC) -c $(CFLAGS) -o $@ -DPAR_VERSION=1 partdiff-seq.c
 
 partdiff-openmp-spalten.o: partdiff-seq.c
-	$(CC) -c $(CFLAGS) -o $@ -DVERSION=zeilen partdiff-seq.c
+	$(CC) -c $(CFLAGS) -o $@ -DPAR_VERSION=2 partdiff-seq.c
 
 partdiff-openmp-zeilen.o: partdiff-seq.c
-	$(CC) -c $(CFLAGS) -o $@ -DVERSION=spalten partdiff-seq.c
+	$(CC) -c $(CFLAGS) -o $@ -DPAR_VERSION=3 partdiff-seq.c
 
 $(PROGS): % : %.o askparams.o
 	$(CC) $(LDFLAGS) -o $@ $@.o askparams.o $(LIBS)
