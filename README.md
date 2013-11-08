@@ -7,12 +7,14 @@ Soweit ist unser Projekt bisher:
 
 partdiff-seq.c ist nach Aufgabe 1 für openmp modifiziert
 
-partdiff-openmp.c ist der Versuch verschiedene Programmversionen durch verschiedenes kompilieren mit Hilfe vom Flag -D zu erzeugen.
+partdiff-openmp.c enthält alle Varianten und wird durch Compileflags zu allen Programmen compilet
 
-Das Makefile muss für die Kompilierung nach Ziel modifiziert werden
+Das Makefile muss für die Abgabe noch so angepasst werden, dass man für die verschiedenen Programmversionen Ziele angeben muss
 
 Wir brauchen ein sbash-Script um unsere Messungen durchzuführen
 
-Der Sourcecode muss weiter bearbeitet werden, um den Faktor 10 zu erreichen
+Als Parameter für den besten Lauf habe ich folgende gefunden partdiff-openmp-element 12 2 512 2 1 1e-08 3 100
+
+Unser Programm hat leider bisher verfälschte Rechenergebnisse... TODO!
 
 Wir müssen dokumentieren und die Messdaten aufbereiten
