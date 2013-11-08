@@ -217,12 +217,17 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		pih = PI * h;
 		fpisin = 0.25 * TWO_PI_SQUARE * h * h;
 	}
-//#define PAR_VERSION 1
-#ifdef PAR_VERSION
+
+#if (PARVER > 0)
 	//Hier setze ich die Anzahl zu nutzender Threads
 	omp_set_num_threads(options->number);
 	int num_threads = omp_get_num_threads();
 	double* maxresiduum_per_thread = calloc(options->number, sizeof(double));
+	// debugging code, remove later!
+	#pragma omp parallel
+	{
+		printf("thread %i test\n", omp_get_thread_num());
+	}
 #endif
 	while (term_iteration > 0)
 	{
@@ -230,7 +235,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		double** Matrix_In  = arguments->Matrix[m2];
 
 		maxresiduum = 0;
-#ifndef PAR_VERSION /* seq */
+#if (PARVER == 0) /* seq */
 		/* over all rows */
 		for (i = 1; i < N; i++)
 		{
@@ -255,16 +260,13 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				{
 					residuum = Matrix_In[i][j] - star;
 					residuum = (residuum < 0) ? -residuum : residuum;
-					#pragma omp critical
-					{
-						maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
-					}
+					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
 				}
 
 				Matrix_Out[i][j] = star;
 			}
 		}
-#elif (PAR_VERSION == 1) /* element */
+#elif (PARVER == 1) /* element */
 		/* over all rows */
 		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
@@ -296,7 +298,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				Matrix_Out[i][j] = star;
 			}
 		}
-#elif (PAR_VERSION == 2) /* spalten */
+#elif (PARVER == 2) /* spalten */
 		/* over all rows */
 		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
@@ -329,7 +331,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				Matrix_Out[i][j] = star;
 			}
 		}
-#elif (PAR_VERSION == 3) /* zeilen */
+#elif (PARVER == 3) /* zeilen */
 		/* over all rows */
 		for (i = 1; i < N; i++)
 		{
@@ -364,7 +366,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		}
 #endif
 
-#ifdef PAR_VERSION
+#if (PARVER > 0)
 		/* I assume options->number < INT_MAX (~2e9) */
 		for (i = 0; i < num_threads; i++)
 		{
@@ -394,7 +396,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	}
 
 	results->m = m2;
-#ifdef PAR_VERSION
+#if (PARVER > 0)
 	free (maxresiduum_per_thread);
 #endif
 }

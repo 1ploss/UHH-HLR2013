@@ -2,35 +2,35 @@
 CC = gcc
 
 # Compiler flags, paths and libraries
-CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2 -ggdb -fopenmp
+CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2 -ggdb
 LDFLAGS = $(CFLAGS)
 LIBS   = -lm
-OBJS = partdiff-seq.o askparams.o
 PROGS = partdiff-seq partdiff-openmp-element partdiff-openmp-spalten partdiff-openmp-zeilen
 
 all: $(PROGS)
 
-# Rule to create *.o from *.c
-%.o : %.c %.h Makefile
-	$(CC) -c $(CFLAGS) -o $@ $*.c
+partdiff-seq-prog.o: CFLAGS += -DPARVER=0
+partdiff-seq-askparams.o: CFLAGS += -DPARVER=0
+partdiff-openmp-element: CFLAGS += -DPARVER=1 -fopenmp
+partdiff-openmp-element-prog.o: CFLAGS += -DPARVER=1 -fopenmp
+partdiff-openmp-element-askparams.o: CFLAGS += -DPARVER=1 -fopenmp
+partdiff-openmp-spalten: CFLAGS += -DPARVER=2  -fopenmp
+partdiff-openmp-spalten-prog.o: CFLAGS += -DPARVER=2  -fopenmp
+partdiff-openmp-spalten-askparams.o: CFLAGS += -DPARVER=2  -fopenmp
+partdiff-openmp-zeilen: CFLAGS += -DPARVER=3  -fopenmp
+partdiff-openmp-zeilen-prog.o: CFLAGS += -DPARVER=3  -fopenmp
+partdiff-openmp-zeilen-askparams.o: CFLAGS += -DPARVER=3  -fopenmp
 
-partdiff-openmp-element.o: partdiff-seq.c
-	$(CC) -c $(CFLAGS) -o $@ -DPAR_VERSION=1 partdiff-seq.c
+%-prog.o: partdiff-seq.c
+	$(CC) $(CFLAGS) -c $< -o $@
+	
+%-askparams.o: askparams.c
+	$(CC) $(CFLAGS) -c $< -o $@
 
-partdiff-openmp-spalten.o: partdiff-seq.c
-	$(CC) -c $(CFLAGS) -o $@ -DPAR_VERSION=2 partdiff-seq.c
-
-partdiff-openmp-zeilen.o: partdiff-seq.c
-	$(CC) -c $(CFLAGS) -o $@ -DPAR_VERSION=3 partdiff-seq.c
-
-$(PROGS): % : %.o askparams.o
-	$(CC) $(LDFLAGS) -o $@ $@.o askparams.o $(LIBS)
+$(PROGS): % : %-prog.o %-askparams.o
+	$(CC) $(LDFLAGS) -o $@ $@-prog.o $@-askparams.o $(LIBS)
 
 clean:
-	$(RM) *.o *~
-
-partdiff-seq.o: partdiff-seq.c Makefile
-
-askparams.o: askparams.c Makefile
+	$(RM) $(PROGS) *.o *~
 
 #Das Makefile muss noch auf openmp angepasst werden und -D VERSION={omp,columns,nested,static,dynamic,guided} passend beim compilieren gesetzt werden.

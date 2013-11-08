@@ -79,7 +79,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <string.h>
-#ifdef PAR_VERSION
+#if PARVER > 0
 #include <omp.h>
 #define ARRAY_SIZE(a) (sizeof (a) / sizeof (a[0]))
 static unsigned scheduling_types[] = {omp_sched_static, omp_sched_dynamic, omp_sched_guided, omp_sched_auto};
@@ -165,7 +165,21 @@ void
 AskParams (struct options* options, int argc, char** argv)
 {
 	int ret;
+	// debugging code, remove later!
+#if (PARVER > 0)
 	unsigned scheduling, chunk_size = 0;
+#endif
+
+#if PARVER == 0
+#elif PARVER == 1
+	printf("openmp elementweise\n");
+#elif PARVER == 2
+	printf("openmp spaltenweise\n");
+#elif PARVER == 3
+	printf("openmp zeilenweise\n");
+#else
+#error wrong PARVER
+#endif
 
 	printf("============================================================\n");
 	printf("Program for calculation of partial differential equations.  \n");
@@ -241,7 +255,7 @@ AskParams (struct options* options, int argc, char** argv)
 			while (getchar() != '\n');
 		}
 		while (ret != 1 || !check_termination(options));
-#ifdef PAR_VERSION
+#if (PARVER > 0)
 		do
 		{
 			printf("\n");
@@ -347,7 +361,7 @@ AskParams (struct options* options, int argc, char** argv)
 			exit(1);
 		}
 
-#ifdef PAR_VERSION
+#if (PARVER > 0)
 		ret = sscanf(argv[6], "%u", &scheduling);
 
 		if (ret != 1 || scheduling > 3)
