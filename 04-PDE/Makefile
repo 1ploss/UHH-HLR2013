@@ -7,7 +7,7 @@ LDFLAGS = $(CFLAGS)
 LIBS   = -lm
 PROGS = partdiff-seq partdiff-openmp-element partdiff-openmp-spalten partdiff-openmp-zeilen
 
-all: $(PROGS)
+all: $(PROGS) #Dies muss für die Abgabe noch geändert werden
 
 partdiff-seq-prog.o: CFLAGS += -DPARVER=0
 partdiff-seq-askparams.o: CFLAGS += -DPARVER=0
