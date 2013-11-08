@@ -121,7 +121,9 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 	uint64_t const N = arguments->N;
 
+#ifndef (ROWALLOCATE)
 	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
+#endif
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
 
 	for (i = 0; i < arguments->num_matrices; i++)
@@ -130,7 +132,12 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 		for (j = 0; j <= N; j++)
 		{
+#ifndef (ROWALLOCATE)
 			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
+#else
+			arguments->Matrix[i][j] = allocateMemory((N + 1) * sizeof(double*));
+#endif
+
 		}
 	}
 }
@@ -334,25 +341,32 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			}
 		}
 #elif (PARVER == 3) /* zeilen */
+		/*TODO in der vorigen Version wurde Seriell jede Reihe und
+		 * darin paralel jede Spalte berechnet, was für sehr
+		 * viele Forks und Joins sorgt.
+		 * Sinnvoller sehe ich es an weiterhin die äußere for-Schleife zu
+		 * paralelisieren, doch bei beiden Schleifen die Indixe zu Tauschen
+		 * (i durch j ersetzen und anders herum)
+		 */
 		/* over all rows */
-		for (i = 1; i < N; i++)
+		#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j, star,residuum)
+		for (j = 1; j < N; j++)
 		{
 			double fpisin_i = 0.0;
 
 			if (options->inf_func == FUNC_FPISIN)
 			{
-				fpisin_i = fpisin * sin(pih * (double)i);
+				fpisin_i = fpisin * sin(pih * (double)j;
 			}
 
 			/* over all columns */
-			#pragma omp parallel for shared(maxresiduum, Matrix_In, Matrix_Out) private(j, star,residuum)
-			for (j = 1; j < N; j++)
+			for (i = 1; i < N; i++)
 			{
 				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
 
 				if (options->inf_func == FUNC_FPISIN)
 				{
-					star += fpisin_i * sin(pih * (double)j);
+					star += fpisin_i * sin(pih * (double)i);
 				}
 
 				if (options->termination == TERM_PREC || term_iteration == 1)
