@@ -19,7 +19,7 @@
 /* Include standard header file.                                            */
 /* ************************************************************************ */
 #define _POSIX_C_SOURCE 200809L
-#define ROWALLOCATE 0
+#define ROWALLOCATE 1
 
 #include <stdio.h>
 #include <stdlib.h>
