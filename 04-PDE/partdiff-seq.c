@@ -19,7 +19,7 @@
 /* Include standard header file.                                            */
 /* ************************************************************************ */
 #define _POSIX_C_SOURCE 200809L
-#define ROWALLOCATE 1
+#define ROWALLOCATE 0
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -146,6 +146,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
 #else
 			arguments->Matrix[i][j] = allocateMemory((N + 1) * sizeof(double*));
+			printf("test");
 #endif
 
 		}
