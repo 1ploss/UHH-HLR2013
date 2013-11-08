@@ -131,7 +131,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 	uint64_t const N = arguments->N;
 
-#if(ROWALLOCATE)
+#if(ROWALLOCATE==0)
 	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
 #endif
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
@@ -142,7 +142,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 		for (j = 0; j <= N; j++)
 		{
-#if (ROWALLOCATE)
+#if (ROWALLOCATE==0)
 			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
 #else
 			arguments->Matrix[i][j] = allocateMemory((N + 1) * sizeof(double*));
