@@ -19,6 +19,7 @@
 /* Include standard header file.                                            */
 /* ************************************************************************ */
 #define _POSIX_C_SOURCE 200809L
+#define ROWALLOCATE 1
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,11 +84,20 @@ freeMatrices (struct calculation_arguments* arguments)
 
 	for (i = 0; i < arguments->num_matrices; i++)
 	{
+#if(ROWALLOCATE)
+		uint64_t j;
+		for (j = 0; j < arguments->num_matrices; j++)
+			{
+			free(arguments->Matrix[i][j]);
+			}
+#endif
 		free(arguments->Matrix[i]);
 	}
 
 	free(arguments->Matrix);
+#if(ROWALLOCATE==0)
 	free(arguments->M);
+#endif
 }
 
 /* ************************************************************************ */
@@ -121,7 +131,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 	uint64_t const N = arguments->N;
 
-#ifndef (ROWALLOCATE)
+#if(ROWALLOCATE)
 	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
 #endif
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
@@ -132,7 +142,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 		for (j = 0; j <= N; j++)
 		{
-#ifndef (ROWALLOCATE)
+#if (ROWALLOCATE)
 			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
 #else
 			arguments->Matrix[i][j] = allocateMemory((N + 1) * sizeof(double*));
@@ -278,16 +288,15 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
 		{
-			double fpisin_i = 0.0;
-
-			if (options->inf_func == FUNC_FPISIN)
-			{
-				fpisin_i = fpisin * sin(pih * (double)i);
-			}
 
 			for (j = 1; j < N; j++) /* over all columns */
 			{
+				double fpisin_i = 0.0;
 
+				if ((options->inf_func == FUNC_FPISIN) && (j==1))//Dies darf nur einmal pro Spalte ausgeführt werden
+				{
+					fpisin_i = fpisin * sin(pih * (double)i);
+				}
 
 				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
 
@@ -356,7 +365,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 			if (options->inf_func == FUNC_FPISIN)
 			{
-				fpisin_i = fpisin * sin(pih * (double)j;
+				fpisin_i = fpisin * sin(pih * (double)j);
 			}
 
 			/* over all columns */
