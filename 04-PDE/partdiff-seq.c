@@ -273,7 +273,6 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			}
 		}
 #elif (PARVER == 1) /* element */
-
 		/* over all rows */
 		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
@@ -286,7 +285,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 				if (options->inf_func == FUNC_FPISIN)
 				{
-					star += 0.25 * TWO_PI_SQUARE * h * h * sin(PI * h * (double)i) * sin(PI * h * (double)j);
+					star += 0.25 * TWO_PI_SQUARE * sin(PI * h * (double)i) * sin(PI * h * (double)j);
 				}
 
 				if (options->termination == TERM_PREC || term_iteration == 1)
