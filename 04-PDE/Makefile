@@ -2,7 +2,7 @@
 CC = gcc
 
 # Compiler flags, paths and libraries
-CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2 -ggdb
+CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2
 LDFLAGS = $(CFLAGS)
 LIBS   = -lm
 PROGS = partdiff-seq partdiff-openmp-element partdiff-openmp-spalten partdiff-openmp-zeilen
@@ -26,6 +26,9 @@ partdiff-openmp-zeilen-askparams.o: CFLAGS += -DPARVER=3  -fopenmp
 	
 %-askparams.o: askparams.c
 	$(CC) $(CFLAGS) -c $< -o $@
+
+partdiff-openmp : partdiff-openmp-spalten
+	ln -s partdiff-openmp-spalten partdiff-openmp
 
 $(PROGS): % : %-prog.o %-askparams.o
 	$(CC) $(LDFLAGS) -o $@ $@-prog.o $@-askparams.o $(LIBS)
