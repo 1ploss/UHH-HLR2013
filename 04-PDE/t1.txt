@@ -1,0 +1,11 @@
+running ./partdiff-seq 1 2 512 2 1 7e-08 3 100 > partdiff-seq-numthreads-1.txt
+running ./partdiff-seq 1 2 512 2 1 7e-08 3 100 > partdiff-seq-numthreads-1.txt
+running ./partdiff-seq 1 2 512 2 1 7e-08 3 100 > partdiff-seq-numthreads-1.txt
+running ./partdiff-seq 1 2 512 2 1 7e-08 3 100 > partdiff-seq-numthreads-1.txt
+running ./partdiff-seq 1 2 512 2 1 7e-08 3 100 > partdiff-seq-numthreads-1.txt
+running ./partdiff-seq 1 2 512 2 1 7e-08 3 100 > partdiff-seq-numthreads-1.txt
+running ./partdiff-openmp-element 12 2 512 2 2 100 1 1  > partdiff-openmp-element-sched-1-1.txt
+running ./partdiff-openmp-element 12 2 512 2 2 100 1 1  > partdiff-openmp-element-sched-1-1.txt
+running ./partdiff-openmp-spalten 12 2 512 2 2 100 1 1  > partdiff-openmp-spalten-sched-1-1.txt
+running ./partdiff-openmp-zeilen  12 2 512 2 2 100 1 1  > partdiff-openmp-zeilen-sched-1-1.txt
+running ./partdiff-openmp-element 12 2 512 2 2 100 1 2  > partdiff-openmp-element-sched-1-2.txt

@@ -5,6 +5,7 @@
 \usepackage{lmodern}
 \usepackage{ngerman}
 \usepackage{fullpage}
+% The data files, written on the first run.
 
 \title{Hochleistungsrechnen: Aufgabenblatt 4}
 \author{}
@@ -14,15 +15,98 @@
 	\maketitle
 	\textbf{Abgabe von:}
 	\begin{itemize}
-		\item Jonas Papmeier, 
-		\item Konstantin Schlese, 
+		\item Jonas Papmeier, ???
+		\item Konstantin Schlese, Matrikel-Nr.: 5639178
 		\item Thorsten Ploß, Matrikel-Nr.: 6324901
 	\end{itemize}
 	\section*{Aufgabe 1: Parallelisierung mit OpenMP}
-	%\input{}
+	Wir haben relativ schnell(2 Stunden) die openmp Versionen der partdiff-seq implementiert.
+	Wir haben 2 Tage gebraucht um mit verschiedenen openmp Einstellungen zu experementieren.
+	
 	\section*{Aufgabe 2: Umsetzung der Datenaufteilungen}
 	\section*{Aufgabe 3: Vergleich der OpenMP-Scheduling-Algorithmen}
 	\section*{Aufgabe 4: Leistungsanalyse}
 	\subsection*{Messung 1}
+	\subsubsection{sequential}
+	\begin{center}
+		\begin{tabular}{ l | c | c | r } \hline
+		 Threads & Berechnungszeit & Norm des Fehlers \\ \hline
+		 1 & 63.915467 & 2.929830e-07 \\ \hline
+ 	     \end{tabular}
+	\end{center}
+	\subsubsection{openmp-element}
+	\begin{center}[
+		\begin{tabular}{ l | c | c | r } \hline
+		 Threads & Berechnungszeit & Norm des Fehlers \\ \hline
+		 1 & 114.948134 & 2.929830e-07 \\ \hline
+		 2 & 61.178141 & 2.929830e-07 \\ \hline
+		 3 & 42.465717 & 2.537307e-07 \\ \hline
+		 4 & 5 & 6 \\ \hline
+		 5 & 5 & 6 \\ \hline
+		 6 & 5 & 6 \\ \hline
+		 7 & 5 & 6 \\ \hline
+		 8 & 5 & 6 \\ \hline
+		 9 & 5 & 6 \\ \hline
+		 10 & 5 & 6 \\ \hline
+		 11 & 5 & 6 \\ \hline
+		 12 & 8 & 9 \\ \hline
+	   \end{tabular}
+	\end{center}
+		\subsubsection{openmp-spalten}
+	\begin{center}[
+		\begin{tabular}{ l | c | c | r } \hline
+		 1 & 62.591578 & 2.929830e-07 \\ \hline
+		 2 & 32.036789 & 2.929830e-07 \\ \hline
+		 3 & 21.502030 & 2.537307e-07 \\ \hline
+		 4 & 5 & 6 \\ \hline
+		 5 & 5 & 6 \\ \hline
+		 6 & 5 & 6 \\ \hline
+		 7 & 5 & 6 \\ \hline
+		 8 & 5 & 6 \\ \hline
+		 9 & 5 & 6 \\ \hline
+		 10 & 5 & 6 \\ \hline
+		 11 & 5 & 6 \\ \hline
+		 12 & 8 & 9 \\ \hline
+	   \end{tabular}
+	\end{center}
+	\subsubsection{openmp-zeilen}
+	\begin{center}[
+		\begin{tabular}{ l | c | c | r } \hline
+		 1 & 84.126204 & 2.929830e-07 \\ \hline
+		 2 & 45.604561  & 2.929830e-07 \\ \hline
+		 3 & 30.055612 & 2.537307e-07 \\ \hline
+		 4 & 22.858381 & 2.071703e-07 \\ \hline
+		 5 & 5 & 6 \\ \hline
+		 6 & 5 & 6 \\ \hline
+		 7 & 5 & 6 \\ \hline
+		 8 & 5 & 6 \\ \hline
+		 9 & 5 & 6 \\ \hline
+		 10 & 5 & 6 \\ \hline
+		 11 & 5 & 6 \\ \hline
+		 12 & 8 & 9 \\ \hline
+	   \end{tabular}
+	\end{center}
 	\subsection*{Messung 2}
+		\begin{center}
+			\begin{tabular}{ l | c | c | r } \hline
+			 Interlines & Berechnungszeit & Norm des Fehlers \\ \hline
+			 1 & 5 & 6 \\ \hline
+			 2 & 5 & 6 \\ \hline
+			 4 & 5 & 6 \\ \hline
+			 8 & 5 & 6 \\ \hline
+			 16 & 5 & 6 \\ \hline
+			 32 & 5 & 6 \\ \hline
+			 64 & 5 & 6 \\ \hline
+			 128 & 5 & 6 \\ \hline
+			 256 & 5 & 6 \\ \hline
+			 512 & 5 & 6 \\ \hline
+			 1024 & 5 & 6 \\ \hline
+		   \end{tabular}
+		\end{center}
+	\subsection*{Messung Scheduling}
+		\begin{center}
+			\begin{tabular}{ l | c | c | r } \hline
+			 Scheduling & Chunk Groesse & Zeit & Norm des Fehlers \\ \hline
+		   \end{tabular}
+		\end{center}
 \end{document}

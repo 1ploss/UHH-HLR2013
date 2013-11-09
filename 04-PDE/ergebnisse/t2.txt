@@ -1,0 +1,117 @@
+running ./partdiff-seq 12 2  1  2 1 9e-06 3 100 > partdiff-seq-lines-1.txt
+running ./partdiff-openmp-element 12 2  1  2 1 9e-06 3 100  > partdiff-openmp-element-liness-1.txt
+running ./partdiff-openmp-spalten PARAMS1 1  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-1.txt
+running ./partdiff-openmp-zeilen 12 2  1  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-1.txt
+running ./partdiff-seq 12 2  2  2 1 9e-06 3 100 > partdiff-seq-lines-2.txt
+running ./partdiff-openmp-element 12 2  2  2 1 9e-06 3 100  > partdiff-openmp-element-liness-2.txt
+running ./partdiff-openmp-spalten PARAMS1 2  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-2.txt
+running ./partdiff-openmp-zeilen 12 2  2  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-2.txt
+running ./partdiff-seq 12 2  4  2 1 9e-06 3 100 > partdiff-seq-lines-4.txt
+running ./partdiff-openmp-element 12 2  4  2 1 9e-06 3 100  > partdiff-openmp-element-liness-4.txt
+running ./partdiff-openmp-spalten PARAMS1 4  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-4.txt
+running ./partdiff-openmp-zeilen 12 2  4  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-4.txt
+running ./partdiff-seq 12 2  8  2 1 9e-06 3 100 > partdiff-seq-lines-8.txt
+running ./partdiff-openmp-element 12 2  8  2 1 9e-06 3 100  > partdiff-openmp-element-liness-8.txt
+running ./partdiff-openmp-spalten PARAMS1 8  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-8.txt
+running ./partdiff-openmp-zeilen 12 2  8  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-8.txt
+running ./partdiff-seq 12 2  16  2 1 9e-06 3 100 > partdiff-seq-lines-16.txt
+running ./partdiff-openmp-element 12 2  16  2 1 9e-06 3 100  > partdiff-openmp-element-liness-16.txt
+running ./partdiff-openmp-spalten PARAMS1 16  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-16.txt
+running ./partdiff-openmp-zeilen 12 2  16  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-16.txt
+running ./partdiff-seq 12 2  32  2 1 9e-06 3 100 > partdiff-seq-lines-32.txt
+running ./partdiff-openmp-element 12 2  32  2 1 9e-06 3 100  > partdiff-openmp-element-liness-32.txt
+running ./partdiff-openmp-spalten PARAMS1 32  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-32.txt
+running ./partdiff-openmp-zeilen 12 2  32  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-32.txt
+running ./partdiff-seq 12 2  64  2 1 9e-06 3 100 > partdiff-seq-lines-64.txt
+running ./partdiff-openmp-element 12 2  64  2 1 9e-06 3 100  > partdiff-openmp-element-liness-64.txt
+running ./partdiff-openmp-spalten PARAMS1 64  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-64.txt
+running ./partdiff-openmp-zeilen 12 2  64  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-64.txt
+running ./partdiff-seq 12 2  128  2 1 9e-06 3 100 > partdiff-seq-lines-128.txt
+running ./partdiff-openmp-element 12 2  128  2 1 9e-06 3 100  > partdiff-openmp-element-liness-128.txt
+running ./partdiff-openmp-spalten PARAMS1 128  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-128.txt
+running ./partdiff-openmp-zeilen 12 2  128  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-128.txt
+running ./partdiff-seq 12 2  512  2 1 9e-06 3 100 > partdiff-seq-lines-512.txt
+running ./partdiff-openmp-element 12 2  512  2 1 9e-06 3 100  > partdiff-openmp-element-liness-512.txt
+running ./partdiff-openmp-spalten PARAMS1 512  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-512.txt
+running ./partdiff-openmp-zeilen 12 2  512  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-512.txt
+running ./partdiff-seq 12 2  1024  2 1 9e-06 3 100 > partdiff-seq-lines-1024.txt
+running ./partdiff-openmp-element 12 2  1024  2 1 9e-06 3 100  > partdiff-openmp-element-liness-1024.txt
+running ./partdiff-openmp-spalten PARAMS1 1024  2 1 9e-06 3 100  > partdiff-openmp-spalten-lines-1024.txt
+running ./partdiff-openmp-zeilen 12 2  1024  2 1 9e-06 3 100  > partdiff-openmp-zeilen-lines-1024.txt
+running ./partdiff-seq 12 2  1  2 2 100 3 100 > partdiff-seq-lines-1.txt
+running ./partdiff-openmp-element 12 2  1  2 2 100 3 100  > partdiff-openmp-element-liness-1.txt
+running ./partdiff-openmp-spalten 12 2  1  2 2 100 3 100  > partdiff-openmp-spalten-lines-1.txt
+running ./partdiff-openmp-zeilen 12 2  1  2 2 100 3 100  > partdiff-openmp-zeilen-lines-1.txt
+running ./partdiff-seq 12 2  2  2 2 100 3 100 > partdiff-seq-lines-2.txt
+running ./partdiff-openmp-element 12 2  2  2 2 100 3 100  > partdiff-openmp-element-liness-2.txt
+running ./partdiff-openmp-spalten 12 2  2  2 2 100 3 100  > partdiff-openmp-spalten-lines-2.txt
+running ./partdiff-openmp-zeilen 12 2  2  2 2 100 3 100  > partdiff-openmp-zeilen-lines-2.txt
+running ./partdiff-seq 12 2  4  2 2 100 3 100 > partdiff-seq-lines-4.txt
+running ./partdiff-openmp-element 12 2  4  2 2 100 3 100  > partdiff-openmp-element-liness-4.txt
+running ./partdiff-openmp-spalten 12 2  4  2 2 100 3 100  > partdiff-openmp-spalten-lines-4.txt
+running ./partdiff-openmp-zeilen 12 2  4  2 2 100 3 100  > partdiff-openmp-zeilen-lines-4.txt
+running ./partdiff-seq 12 2  8  2 2 100 3 100 > partdiff-seq-lines-8.txt
+running ./partdiff-openmp-element 12 2  8  2 2 100 3 100  > partdiff-openmp-element-liness-8.txt
+running ./partdiff-openmp-spalten 12 2  8  2 2 100 3 100  > partdiff-openmp-spalten-lines-8.txt
+running ./partdiff-openmp-zeilen 12 2  8  2 2 100 3 100  > partdiff-openmp-zeilen-lines-8.txt
+running ./partdiff-seq 12 2  16  2 2 100 3 100 > partdiff-seq-lines-16.txt
+running ./partdiff-openmp-element 12 2  16  2 2 100 3 100  > partdiff-openmp-element-liness-16.txt
+running ./partdiff-openmp-spalten 12 2  16  2 2 100 3 100  > partdiff-openmp-spalten-lines-16.txt
+running ./partdiff-openmp-zeilen 12 2  16  2 2 100 3 100  > partdiff-openmp-zeilen-lines-16.txt
+running ./partdiff-seq 12 2  32  2 2 100 3 100 > partdiff-seq-lines-32.txt
+running ./partdiff-openmp-element 12 2  32  2 2 100 3 100  > partdiff-openmp-element-liness-32.txt
+running ./partdiff-openmp-spalten 12 2  32  2 2 100 3 100  > partdiff-openmp-spalten-lines-32.txt
+running ./partdiff-openmp-zeilen 12 2  32  2 2 100 3 100  > partdiff-openmp-zeilen-lines-32.txt
+running ./partdiff-seq 12 2  64  2 2 100 3 100 > partdiff-seq-lines-64.txt
+running ./partdiff-openmp-element 12 2  64  2 2 100 3 100  > partdiff-openmp-element-liness-64.txt
+running ./partdiff-openmp-spalten 12 2  64  2 2 100 3 100  > partdiff-openmp-spalten-lines-64.txt
+running ./partdiff-openmp-zeilen 12 2  64  2 2 100 3 100  > partdiff-openmp-zeilen-lines-64.txt
+running ./partdiff-seq 12 2  128  2 2 100 3 100 > partdiff-seq-lines-128.txt
+running ./partdiff-openmp-element 12 2  128  2 2 100 3 100  > partdiff-openmp-element-liness-128.txt
+running ./partdiff-openmp-spalten 12 2  128  2 2 100 3 100  > partdiff-openmp-spalten-lines-128.txt
+running ./partdiff-openmp-zeilen 12 2  128  2 2 100 3 100  > partdiff-openmp-zeilen-lines-128.txt
+running ./partdiff-seq 12 2  512  2 2 100 3 100 > partdiff-seq-lines-512.txt
+running ./partdiff-openmp-element 12 2  512  2 2 100 3 100  > partdiff-openmp-element-liness-512.txt
+running ./partdiff-openmp-spalten 12 2  512  2 2 100 3 100  > partdiff-openmp-spalten-lines-512.txt
+running ./partdiff-openmp-zeilen 12 2  512  2 2 100 3 100  > partdiff-openmp-zeilen-lines-512.txt
+running ./partdiff-seq 12 2  1024  2 2 100 3 100 > partdiff-seq-lines-1024.txt
+running ./partdiff-openmp-element 12 2  1024  2 2 100 3 100  > partdiff-openmp-element-liness-1024.txt
+running ./partdiff-openmp-spalten 12 2  1024  2 2 100 3 100  > partdiff-openmp-spalten-lines-1024.txt
+running ./partdiff-openmp-zeilen 12 2  1024  2 2 100 3 100  > partdiff-openmp-zeilen-lines-1024.txt
+running ./partdiff-seq 12 2  1  2 2 100 3 100 > partdiff-seq-lines-1.txt
+running ./partdiff-openmp-element 12 2  1  2 2 100 3 100  > partdiff-openmp-element-liness-1.txt
+running ./partdiff-openmp-spalten 12 2  1  2 2 100 3 100  > partdiff-openmp-spalten-lines-1.txt
+running ./partdiff-openmp-zeilen 12 2  1  2 2 100 3 100  > partdiff-openmp-zeilen-lines-1.txt
+running ./partdiff-seq 12 2  2  2 2 100 3 100 > partdiff-seq-lines-2.txt
+running ./partdiff-openmp-element 12 2  2  2 2 100 3 100  > partdiff-openmp-element-liness-2.txt
+running ./partdiff-openmp-spalten 12 2  2  2 2 100 3 100  > partdiff-openmp-spalten-lines-2.txt
+running ./partdiff-openmp-zeilen 12 2  2  2 2 100 3 100  > partdiff-openmp-zeilen-lines-2.txt
+running ./partdiff-seq 12 2  4  2 2 100 3 100 > partdiff-seq-lines-4.txt
+running ./partdiff-openmp-element 12 2  4  2 2 100 3 100  > partdiff-openmp-element-liness-4.txt
+running ./partdiff-openmp-spalten 12 2  4  2 2 100 3 100  > partdiff-openmp-spalten-lines-4.txt
+running ./partdiff-openmp-zeilen 12 2  4  2 2 100 3 100  > partdiff-openmp-zeilen-lines-4.txt
+running ./partdiff-seq 12 2  8  2 2 100 3 100 > partdiff-seq-lines-8.txt
+running ./partdiff-openmp-element 12 2  8  2 2 100 3 100  > partdiff-openmp-element-liness-8.txt
+running ./partdiff-openmp-spalten 12 2  8  2 2 100 3 100  > partdiff-openmp-spalten-lines-8.txt
+running ./partdiff-openmp-zeilen 12 2  8  2 2 100 3 100  > partdiff-openmp-zeilen-lines-8.txt
+running ./partdiff-seq 12 2  16  2 2 100 3 100 > partdiff-seq-lines-16.txt
+running ./partdiff-openmp-element 12 2  16  2 2 100 3 100  > partdiff-openmp-element-liness-16.txt
+running ./partdiff-openmp-spalten 12 2  16  2 2 100 3 100  > partdiff-openmp-spalten-lines-16.txt
+running ./partdiff-openmp-zeilen 12 2  16  2 2 100 3 100  > partdiff-openmp-zeilen-lines-16.txt
+running ./partdiff-seq 12 2  32  2 2 100 3 100 > partdiff-seq-lines-32.txt
+running ./partdiff-openmp-element 12 2  32  2 2 100 3 100  > partdiff-openmp-element-liness-32.txt
+running ./partdiff-openmp-spalten 12 2  32  2 2 100 3 100  > partdiff-openmp-spalten-lines-32.txt
+running ./partdiff-openmp-zeilen 12 2  32  2 2 100 3 100  > partdiff-openmp-zeilen-lines-32.txt
+running ./partdiff-seq 12 2  64  2 2 100 3 100 > partdiff-seq-lines-64.txt
+running ./partdiff-openmp-element 12 2  64  2 2 100 3 100  > partdiff-openmp-element-liness-64.txt
+running ./partdiff-openmp-spalten 12 2  64  2 2 100 3 100  > partdiff-openmp-spalten-lines-64.txt
+running ./partdiff-openmp-zeilen 12 2  64  2 2 100 3 100  > partdiff-openmp-zeilen-lines-64.txt
+running ./partdiff-seq 12 2  128  2 2 100 3 100 > partdiff-seq-lines-128.txt
+running ./partdiff-openmp-element 12 2  128  2 2 100 3 100  > partdiff-openmp-element-liness-128.txt
+running ./partdiff-openmp-spalten 12 2  128  2 2 100 3 100  > partdiff-openmp-spalten-lines-128.txt
+running ./partdiff-openmp-zeilen 12 2  128  2 2 100 3 100  > partdiff-openmp-zeilen-lines-128.txt
+running ./partdiff-seq 12 2  512  2 2 100 3 100 > partdiff-seq-lines-512.txt
+running ./partdiff-openmp-element 12 2  512  2 2 100 3 100  > partdiff-openmp-element-liness-512.txt
+running ./partdiff-openmp-spalten 12 2  512  2 2 100 3 100  > partdiff-openmp-spalten-lines-512.txt
+running ./partdiff-openmp-zeilen 12 2  512  2 2 100 3 100  > partdiff-openmp-zeilen-lines-512.txt
+running ./partdiff-seq 12 2  1024  2 2 100 3 100 > partdiff-seq-lines-1024.txt
