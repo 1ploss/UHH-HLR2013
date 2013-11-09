@@ -1,9 +1,9 @@
 #!/bin/bash
-#PRECISION=29e-08
-PRECISION=100
+PRECISION=7e-08
+#PRECISION=100
 test1() \
 {
-	PARAMS="2 512 2 2 "${PRECISION}" 3 100"
+	PARAMS="2 512 2 1 "${PRECISION}" 3 100"
 	echo "running ./partdiff-seq 1 $PARAMS > partdiff-seq-numthreads-1.txt"
 	echo "running ./partdiff-seq 1 $PARAMS > partdiff-seq-numthreads-1.txt" >> t1.txt
 	./partdiff-seq  1 $PARAMS > partdiff-seq-numthreads-1.txt
@@ -29,22 +29,22 @@ test_openmp() \
 	CHUNK_SIZE=$4
 	#PREFIX="valgrind --leak-check=full"
 	PREFIX=
-	PARAMS="12 2 512 2 2 "${PRECISION}" "${SCHED}" "${CHUNK_SIZE}
+	PARAMS="12 2 512 2 1 ${PRECISION} ${SCHED} ${CHUNK_SIZE}"
 	echo "running ./partdiff-openmp-element $PARAMS  > partdiff-openmp-element-${MOD}-${SCHED}-${CHUNK_SIZE}.txt"
 	echo "running ./partdiff-openmp-element $PARAMS  > partdiff-openmp-element-${MOD}-${SCHED}-${CHUNK_SIZE}.txt" >> t1.txt
-	${PREFIX} ./partdiff-openmp-element $i $PARAMS  > partdiff-openmp-element-${MOD}-${SCHED}-${CHUNK_SIZE}.txt
+	./partdiff-openmp-element $PARAMS  > partdiff-openmp-element-${MOD}-${SCHED}-${CHUNK_SIZE}.txt
 	echo "running ./partdiff-openmp-spalten $PARAMS  > partdiff-openmp-spalten-${MOD}-${SCHED}-${CHUNK_SIZE}.txt"
 	echo "running ./partdiff-openmp-spalten $PARAMS  > partdiff-openmp-spalten-${MOD}-${SCHED}-${CHUNK_SIZE}.txt" >> t1.txt
-	${PREFIX} ./partdiff-openmp-spalten $i $PARAMS  > partdiff-openmp-spalten-${MOD}-${SCHED}-${CHUNK_SIZE}.txt
+	./partdiff-openmp-spalten $PARAMS  > partdiff-openmp-spalten-${MOD}-${SCHED}-${CHUNK_SIZE}.txt
 	echo "running ./partdiff-openmp-zeilen  $PARAMS  > partdiff-openmp-zeilen-${MOD}-${SCHED}-${CHUNK_SIZE}.txt"
 	echo "running ./partdiff-openmp-zeilen  $PARAMS  > partdiff-openmp-zeilen-${MOD}-${SCHED}-${CHUNK_SIZE}.txt" >> t1.txt
-	${PREFIX}./partdiff-openmp-zeilen  $i $PARAMS  > partdiff-openmp-zeilen-${MOD}-${SCHED}-${CHUNK_SIZE}.txt
+	./partdiff-openmp-zeilen  $PARAMS  > partdiff-openmp-zeilen-${MOD}-${SCHED}-${CHUNK_SIZE}.txt
 }
 
 test2() \
 {
 	PARAMS1="12 2 " 
-	PARAMS2=" 2 2 "${PRECISION}" 3 100"
+	PARAMS2=" 2 1 "${PRECISION}" 3 100"
 	# für X = 2^i 0<=i<=10
 	for i in 1 2 4 8 16 32 64 128 512 1024
 	do
@@ -74,13 +74,13 @@ test3() \
 	do	
 		test_openmp "sched" 512 1 ${CHUNK_SIZE}
 	done
-	test_openmp "sched" 512 2 0		
+	test_openmp "sched" 512 2 1		
 }
 
 
-rm partdiff-*.txt
-#test1
+#rm partdiff-*.txt
+test1
 echo -----------------------[test1 done]------------------------------------
-#test2
+test2
 echo -----------------------[test2 done]------------------------------------
 test3
