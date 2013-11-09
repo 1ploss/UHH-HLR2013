@@ -208,7 +208,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		m2 = 0;
 	}
 
-#if PARVER > 0
+#if PARVER > 0//changed
 	omp_set_num_threads(options->number);
 	int num_threads = options->number;
 	double* maxresiduum_per_thread = calloc(num_threads, sizeof(double));
@@ -217,7 +217,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	if (options->inf_func == FUNC_FPISIN)
 	{
 		pih = PI * h;
-		fpisin = 0.25 * TWO_PI_SQUARE * h * h;
+		fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
 	}
 
 	while (term_iteration > 0)
@@ -227,7 +227,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 		maxresiduum = 0;
 
-#if (PARVER == 0)
+#if (PARVER == 0)//changed
 		/* over all rows */
 		for (int i = 1; i < N; i++)
 		{
@@ -258,7 +258,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				Matrix_Out[i][j] = star;
 			}
 		}
-#elif (PARVER==1)
+#elif (PARVER==1)//changed
 		/* over all rows */
 		#pragma omp parallel for collapse(2)
 		for (int i = 1; i < N; i++)
@@ -271,7 +271,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				{
 					fpisin_i = fpisin * sin(pih * (double)i);
 				}
-
+//changed ende
 				double star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
 
 				if (options->inf_func == FUNC_FPISIN)
@@ -283,14 +283,14 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				{
 					double residuum = Matrix_In[i][j] - star;
 					residuum = (residuum < 0) ? -residuum : residuum;
-					int t = omp_get_thread_num();
+					int t = omp_get_thread_num();//changed
 					maxresiduum_per_thread[t] = (residuum < maxresiduum_per_thread[t]) ? maxresiduum_per_thread[t] : residuum;
 				}
 
 				Matrix_Out[i][j] = star;
 			}
 		}
-#elif (PARVER==2)
+#elif (PARVER==2)//changed
 		/* spalten */
 		/* over all rows */
 		for (int i = 1; i < N; i++)
@@ -324,7 +324,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				Matrix_Out[i][j] = star;
 			}
 		}
-#elif PARVER==3
+#elif PARVER==3//changed
 		/* zeilen */
 		/* over all rows */
 		#pragma omp parallel for
@@ -362,7 +362,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 #else
 #error PARVER falsch
 #endif
-#if PARVER > 0
+#if PARVER > 0//changed
 		#pragma omp barrier
 		maxresiduum = 0;
 		for (int i = 0; i < num_threads; ++i)
@@ -395,7 +395,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	}
 
 	results->m = m1;
-#if PARVER > 0
+#if PARVER > 0//changed
 	free(maxresiduum_per_thread);
 #endif
 }
