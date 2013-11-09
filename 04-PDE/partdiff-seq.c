@@ -273,24 +273,20 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			}
 		}
 #elif (PARVER == 1) /* element */
-		double fpisin_i = 0.0;
+
 		/* over all rows */
-		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(fpisin_i,i,j,star,residuum)
+		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
 		for (i = 1; i < N; i++)
 		{
 
 			for (j = 1; j < N; j++) /* over all columns */
 			{
-
+				//double fpisin_i = 0.0;
 				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
 
-				if (options->inf_func == FUNC_FPISIN)//Dies darf nur einmal pro Spalte ausgeführt werden
+				if (options->inf_func == FUNC_FPISIN)
 				{
-					if(j==1)
-					{
-						fpisin_i = fpisin * sin(pih * (double)i);
-					}
-					star += fpisin_i * sin(pih * (double)j);
+					star += 0.25 * TWO_PI_SQUARE * h * h * sin(PI * h * (double)i) * sin(PI * h * (double)j);
 				}
 
 				if (options->termination == TERM_PREC || term_iteration == 1)
