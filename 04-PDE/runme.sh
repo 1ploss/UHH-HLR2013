@@ -46,7 +46,7 @@ test2() \
 	PARAMS1="12 2 " 
 	PARAMS2=" 2 1 "${PRECISION}" 3 100"
 	# für X = 2^i 0<=i<=10
-	for i in 1 2 4 8 16 32 64 128 512 1024
+	for i in 1 2 4 8 16 32 64 128 256 512 1024
 	do
 		echo "running ./partdiff-seq $PARAMS1 $i $PARAMS2 > partdiff-seq-lines-${i}.txt"
 		echo "running ./partdiff-seq $PARAMS1 $i $PARAMS2 > partdiff-seq-lines-${i}.txt" >> t2.txt
