@@ -7,7 +7,7 @@ LDFLAGS = $(CFLAGS)
 LIBS   = -lm
 PROGS = partdiff-seq partdiff-openmp-element partdiff-openmp-spalten partdiff-openmp-zeilen
 
-all: $(PROGS)
+all: $(PROGS) partdiff-openmp
 
 partdiff-seq-prog.o: CFLAGS += -DPARVER=0
 partdiff-seq-askparams.o: CFLAGS += -DPARVER=0
@@ -35,5 +35,3 @@ $(PROGS): % : %-prog.o %-askparams.o
 
 clean:
 	$(RM) $(PROGS) *.o *~
-
-#Das Makefile muss noch auf openmp angepasst werden und -D VERSION={omp,columns,nested,static,dynamic,guided} passend beim compilieren gesetzt werden.
