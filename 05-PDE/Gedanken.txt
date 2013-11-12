@@ -1,6 +1,6 @@
 Ideen zu PThread:
 - Schleifen in Methode umwandeln
-- Methode hat als Parameter die Indize
+- Methode hat als Parameter die Indize, braucht noch die Endindize oder die Laufweite
 - Matrix kann "global" gehalten werden
 
 Schlechte Impletmentierung:
@@ -8,13 +8,13 @@ while(bedingung)
 	"switchIn_MatrixwithOut_Matrix"
 	for anzahl threads
 		"ermittlerthreadlokaleij"
-		pthread_create(methode(i,j))
+		pthread_create(methode(i,j,n))
 
 Grund: andauerndes erzeugen und Zerstören der threads
 
 Idee1:
 	erst Threads erzeugen
-	dann methode(i,j) durchlaufen
+	dann methode(i,j,n) durchlaufen
 	dann hinter barriere single bedingung abfragen
 	dann Matrizen tauschen
 	dann wieder von vorne parallel
