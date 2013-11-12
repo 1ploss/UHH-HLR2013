@@ -185,7 +185,7 @@ static
 void
 calculate (struct calculation_arguments const* arguments, struct calculation_results *results, struct options const* options)
 {
-	int i, j;                                   /* local variables for loops  */
+/**/	int i, j;                                   /* local variables for loops  */
 	int m1, m2;                                 /* used as indices for old and new matrices       */
 	double star;                                /* four times center value minus 4 neigh.b values */
 	double residuum;                            /* residuum of current iteration                  */
@@ -253,10 +253,12 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 				Matrix_Out[i][j] = star;
 			}
-		}
 
+		}
+		//TODO Barriere single
+		//TODO globalmaxresiduum
 		results->stat_iteration++;
-		results->stat_precision = maxresiduum;
+		results->stat_precision = maxresiduum;//TODO anpassen
 
 		/* exchange m1 and m2 */
 		i = m1;
@@ -266,7 +268,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		/* check for stopping calculation, depending on termination method */
 		if (options->termination == TERM_PREC)
 		{
-			if (maxresiduum < options->term_precision)
+			if (maxresiduum < options->term_precision)//TODO anpassen
 			{
 				term_iteration = 0;
 			}
@@ -275,6 +277,8 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		{
 			term_iteration--;
 		}
+		//TODO die Threads wieder frei lassen
+		//TODO Barriere
 	}
 
 	results->m = m2;
