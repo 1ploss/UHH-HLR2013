@@ -178,6 +178,60 @@ initMatrices (struct calculation_arguments* arguments, struct options const* opt
 	}
 }
 
+static
+void
+posixcalculate(struct daten daten)
+{
+	/*
+	 * Diese Variablen müssen durch das Struct "daten" instanziiert werden
+	 */
+	int i,j,iEnde,jEnde,threadnummer;
+	double fpisin,pih,star,residuum,maxresiduum;
+	double** Matrix_Out,Matrix_In;
+	int stoerfunktion,termination,iterationenUebrig;
+	double* globalmaxresiduum;//hier wird das maxresiduum eines jeden Threads gesammelt
+	/*
+	 * stoerfunktion 0, wenn keine 1, wenn
+	 * termination 0, wenn nach Anzahl Iterationen, 1 wenn nach Genauigkeit
+	 * iterationenUebrig = wievielte Iterationen noch zu machen sind bis zur Termination
+	 * 						unwichtig, wenn termination == 1
+	 */
+
+	//TODO i und j müssen auf die für diesen Thread gültigen Startwerte gesetzt werden
+
+	for (i = 1; i < iEnde; i++)
+			{
+				double fpisin_i = 0.0;
+
+				if (stoerfunktion)
+				{
+					fpisin_i = fpisin * sin(pih * (double)i);
+				}
+
+				/* over all columns */
+				for (j = 1; j < jEnde; j++)
+				{
+					star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+
+					if (stoerfunktion)
+					{
+						star += fpisin_i * sin(pih * (double)j);
+					}
+
+					if (termination || iterationenUebrig == 1)
+					{
+						residuum = Matrix_In[i][j] - star;
+						residuum = (residuum < 0) ? -residuum : residuum;
+						maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
+					}
+
+					Matrix_Out[i][j] = star;
+				}
+
+			}
+	globalmaxresiduum[threadnummer]=maxresiduum;
+}
+
 /* ************************************************************************ */
 /* calculate: solves the equation                                           */
 /* ************************************************************************ */
@@ -255,10 +309,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			}
 
 		}
-		//TODO Barriere single
-		//TODO globalmaxresiduum
+		// Barriere single
+		// globalmaxresiduum
 		results->stat_iteration++;
-		results->stat_precision = maxresiduum;//TODO anpassen
+		results->stat_precision = maxresiduum;// anpassen
 
 		/* exchange m1 and m2 */
 		i = m1;

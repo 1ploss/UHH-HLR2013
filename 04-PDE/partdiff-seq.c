@@ -19,10 +19,6 @@
 /* Include standard header file.                                            */
 /* ************************************************************************ */
 #define _POSIX_C_SOURCE 200809L
-<<<<<<< HEAD
-=======
-
->>>>>>> perHandentfernungvonROWALLOCATE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,13 +86,8 @@ freeMatrices (struct calculation_arguments* arguments)
 	}
 
 	free(arguments->Matrix);
-<<<<<<< HEAD
-	free(arguments->M);
-=======
 
 	free(arguments->M);
-
->>>>>>> perHandentfernungvonROWALLOCATE
 }
 
 /* ************************************************************************ */
@@ -130,13 +121,9 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 	uint64_t const N = arguments->N;
 
-<<<<<<< HEAD
-	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
-=======
 
 	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
 
->>>>>>> perHandentfernungvonROWALLOCATE
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
 
 	for (i = 0; i < arguments->num_matrices; i++)
@@ -145,10 +132,6 @@ allocateMatrices (struct calculation_arguments* arguments)
 
 		for (j = 0; j <= N; j++)
 		{
-<<<<<<< HEAD
-=======
-
->>>>>>> perHandentfernungvonROWALLOCATE
 			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
 		}
 	}
@@ -278,21 +261,14 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				Matrix_Out[i][j] = star;
 			}
 		}
-<<<<<<< HEAD
+
 #elif (PARVER==1)//changed
 		/* over all rows */
 		#pragma omp parallel for collapse(2)
 		for (int i = 1; i < N; i++)
-=======
-#elif (PARVER == 1) /* element */
-		/* over all rows */
-		#pragma omp parallel for collapse(2) shared(maxresiduum, Matrix_In, Matrix_Out) private(i,j,star,residuum)
-		for (i = 1; i < N; i++)
->>>>>>> perHandentfernungvonROWALLOCATE
 		{
 			for (int j = 1; j < N; j++)
 			{
-<<<<<<< HEAD
 				double fpisin_i = 0.0;
 
 				if (options->inf_func == FUNC_FPISIN)
@@ -305,14 +281,6 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				if (options->inf_func == FUNC_FPISIN)
 				{
 					star += fpisin_i * sin(pih * (double)j);
-=======
-				//double fpisin_i = 0.0;
-				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
-
-				if (options->inf_func == FUNC_FPISIN)
-				{
-					star += 0.25 * TWO_PI_SQUARE * sin(PI * h * (double)i) * sin(PI * h * (double)j);
->>>>>>> perHandentfernungvonROWALLOCATE
 				}
 
 				if (options->termination == TERM_PREC || term_iteration == 1)
