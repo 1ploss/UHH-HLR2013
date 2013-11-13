@@ -46,6 +46,17 @@ struct calculation_results
 	double    stat_precision; /* actual precision of all slaves in iteration    */
 };
 
+struct daten
+{
+	int i,j,iEnde,jEnde;
+	double fpisin,pih;
+	double** Matrix_Out,Matrix_In;
+	int stoerfunktion,termination;
+	double* globalmaxresiduum;
+	uint64_t iterationenUebrig;
+
+};
+
 /* ************************************************************************ */
 /* Global variables                                                         */
 /* ************************************************************************ */
@@ -186,10 +197,12 @@ posixcalculate(struct daten daten)
 	 * Diese Variablen müssen durch das Struct "daten" instanziiert werden
 	 */
 	int i,j,iEnde,jEnde,threadnummer;
-	double fpisin,pih,star,residuum,maxresiduum;
+	double fpisin,pih;
+	double residuum,maxresiduum,star =0.0;
 	double** Matrix_Out,Matrix_In;
 	int stoerfunktion,termination,iterationenUebrig;
 	double* globalmaxresiduum;//hier wird das maxresiduum eines jeden Threads gesammelt
+	uint64_t iterationenUebrig
 	/*
 	 * stoerfunktion 0, wenn keine 1, wenn
 	 * termination 0, wenn nach Anzahl Iterationen, 1 wenn nach Genauigkeit
@@ -436,6 +449,7 @@ main (int argc, char** argv)
 	struct options options;
 	struct calculation_arguments arguments;
 	struct calculation_results results;
+	struct daten daten;
 
 	/* get parameters */
 	AskParams(&options, argc, argv);              /* ************************* */
@@ -444,15 +458,32 @@ main (int argc, char** argv)
 
 	allocateMatrices(&arguments);        /*  get and initialize variables and matrices  */
 	initMatrices(&arguments, &options);            /* ******************************************* */
+	//init daten:
+	daten->stoerfunktion=options->inf_func-1;
+	daten->fpisin=0.25 * TWO_PI_SQUARE * arguments->h * arguments->h;
+	daten->iterationenUebrig=arguments->N;
+	daten->pih=PI*arguments->h;
+	daten->termination=options->options->termination -1;
+	daten->globalmaxresiduum =calloc(sizeof(double));
 
-	gettimeofday(&start_time, NULL);                   /*  start timer         */
-	calculate(&arguments, &results, &options);                                      /*  solve the equation  */
-	gettimeofday(&comp_time, NULL);                   /*  stop timer          */
+	gettimeofday(&start_time, NULL);
+	for(int n=0;n<options->number;n++)
+	{
+		daten->i,daten->j=n*options->number;
+		daten->iEnde,daten->jEnde=(n+1)*options->number;
+		//TODO i,j,iEnde und jEnde berechnen
+		//TODO threads erstellen
+	}
+	gettimeofday(&comp_time, NULL);
+
+//	gettimeofday(&start_time, NULL);                   /*  start timer         */
+//	calculate(&arguments, &results, &options);                                      /*  solve the equation  */
+//	gettimeofday(&comp_time, NULL);                   /*  stop timer          */
 
 	displayStatistics(&arguments, &results, &options);
 	DisplayMatrix(&arguments, &results, &options);
 
 	freeMatrices(&arguments);                                       /*  free memory     */
-
+	free(daten->globalmaxresiduum);
 	return 0;
 }
