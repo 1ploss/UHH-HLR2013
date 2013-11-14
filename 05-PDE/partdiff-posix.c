@@ -49,7 +49,7 @@ struct calculation_results
 struct daten
 {
 	int i,j,iEnde,jEnde;
-	double fpisin,pih;
+	double fpisin,pih,prezision;
 	double** Matrix_Out,Matrix_In;
 	int stoerfunktion,termination;
 	double* globalmaxresiduum;
@@ -191,6 +191,40 @@ initMatrices (struct calculation_arguments* arguments, struct options const* opt
 
 static
 void
+waehrend(struct daten daten,struct calculation_results results)
+{
+	while(daten->iterationenUebrig)
+	{
+
+		double maxresiduum = 10.0;//notdürftig gebastelt
+		results->stat_iteration++;
+		results->stat_precision = maxresiduum;
+
+		double** i = daten->Matrix_In;
+		daten->Matrix_In = daten->Matrix_Out;
+		daten->Matrix_Out = i;
+
+		/* check for stopping calculation, depending on termination method */
+		if (daten->termination)
+		{
+			if (daten->prezision>maxresiduum)//TODO anpassen
+			{
+				daten->iterationenUebrig = 0;
+			}
+		}
+		else if (!daten->termination)
+		{
+			daten->iterationenUebrig--;
+		}
+
+		for()
+
+	}
+	results->m = daten->Matrix_Out;
+}
+
+static
+void
 posixcalculate(struct daten daten)
 {
 	/*
@@ -201,7 +235,6 @@ posixcalculate(struct daten daten)
 	double residuum,maxresiduum,star =0.0;
 	double** Matrix_Out,Matrix_In;
 	int stoerfunktion,termination,iterationenUebrig;
-	double* globalmaxresiduum;//hier wird das maxresiduum eines jeden Threads gesammelt
 	uint64_t iterationenUebrig
 	/*
 	 * stoerfunktion 0, wenn keine 1, wenn
@@ -242,7 +275,7 @@ posixcalculate(struct daten daten)
 				}
 
 			}
-	globalmaxresiduum[threadnummer]=maxresiduum;
+	daten->globalmaxresiduum[threadnummer]=maxresiduum;
 }
 
 /* ************************************************************************ */
@@ -463,8 +496,9 @@ main (int argc, char** argv)
 	daten->fpisin=0.25 * TWO_PI_SQUARE * arguments->h * arguments->h;
 	daten->iterationenUebrig=arguments->N;
 	daten->pih=PI*arguments->h;
-	daten->termination=options->options->termination -1;
+	daten->termination=options->termination -1;
 	daten->globalmaxresiduum =calloc(sizeof(double));
+	daten->prezision=options->term_precision;
 
 	gettimeofday(&start_time, NULL);
 	for(int n=0;n<options->number;n++)
