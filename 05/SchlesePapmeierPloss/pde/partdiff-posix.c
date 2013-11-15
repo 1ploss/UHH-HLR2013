@@ -303,6 +303,42 @@ double calculate_in_a_thread_rows(void* arg)
 	return maxresiduum;
 }
 
+double calculate_in_a_thread_columns(void* arg)
+{
+	args_t* args = (args_t*)arg;
+	double fpisin_i = 0.0;
+
+	double** Matrix_In = args->Matrix_In;
+	double** Matrix_Out = args->Matrix_Out;
+	double   pih = args->pih;
+	double   fpisin = args->fpisin;
+	double maxresiduum=0;
+	int i = args->i;
+	int j = args->j;
+	int jEnde = args->jEnde;
+
+	int N = args->N;
+
+	for(;j<jEnde&&j<N;j++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
+	{
+		if (args->options->inf_func == FUNC_FPISIN)
+			{
+				fpisin_i = fpisin * sin(pih * (double)i);
+			}
+				double star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+				if (args->options->inf_func == FUNC_FPISIN)
+			{
+				star += fpisin_i * sin(pih * (double)j);
+			}
+				Matrix_Out[i][j] = star;
+			double residuum = Matrix_In[i][j] - star;
+			residuum = (residuum < 0) ? -residuum : residuum;
+			maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;//Dies musste natürlich wieder aus allen residien gesucht werden.
+	}
+
+	return maxresiduum;
+}
+
 /* ************************************************************************ */
 /* calculate: solves the equation                                           */
 /* ************************************************************************ */
@@ -354,10 +390,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		maxresiduum = 0;
 
 		/* over all rows */
-		for (i = 1; i < N; i+=JOBSIZE)//Jede Schleife springt jetzt eine bestimmte Weite
+		for (i = 1; i < N+(JOBSIZE/2); i+=JOBSIZE)//Jede Schleife springt jetzt eine bestimmte Weite
 		{
 			/* over all columns */
-			for (j = 1; j < N; j+=JOBSIZE)
+			for (j = 1; j < N; j++)//=JOBSIZE)
 			{
 				double residuum;
 				again:
