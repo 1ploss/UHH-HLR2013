@@ -19,7 +19,7 @@
 /* Include standard header file.                                            */
 /* ************************************************************************ */
 #define _POSIX_C_SOURCE 200809L
-#define JOBSIZE 5
+#define JOBSIZE 50
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -238,6 +238,7 @@ double calculate_in_a_thread_group(void* arg)
 	int j = args->j;
 	int iEnde = args->iEnde;
 	int jEnde = args->jEnde;
+	fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, i + iEnde, j, j + jEnde);
 
 	for(;i<iEnde;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
 	{
@@ -331,6 +332,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 					}
 				}
 
+
 				args[arg_index].options = options;
 				args[arg_index].Matrix_In = Matrix_In;
 				args[arg_index].Matrix_Out = Matrix_Out;
@@ -340,6 +342,8 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].j = j;
 				args[arg_index].iEnde = i+JOBSIZE;//Definiert die Endindize der zu berechnenden Gruppe
 				args[arg_index].jEnde = j+JOBSIZE;
+
+				__sync_synchronize(); // zum debuggen, eigentlich nicht nötig.
 
 				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread_group, &args[arg_index]))
 				{
