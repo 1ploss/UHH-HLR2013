@@ -192,6 +192,7 @@ typedef struct
 	int iEnde;
 	int jEnde;
 	double result;
+	int N;
 } args_t;
 
 double calculate_in_a_thread(void* arg)
@@ -238,10 +239,11 @@ double calculate_in_a_thread_group(void* arg)
 	int j = args->j;
 	int iEnde = args->iEnde;
 	int jEnde = args->jEnde;
+	int N = args->N;
 
-	for(;i<iEnde;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
+	for(;i<iEnde&&i<N;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
 	{
-		for(;j<jEnde;j++)
+		for(;j<jEnde&&i<N;j++)
 		{
 			if (args->options->inf_func == FUNC_FPISIN)
 				{
@@ -340,6 +342,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].j = j;
 				args[arg_index].iEnde = i+JOBSIZE;//Definiert die Endindize der zu berechnenden Gruppe
 				args[arg_index].jEnde = j+JOBSIZE;
+				args[arg_index].N = N;
 
 				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread_group, &args[arg_index]))
 				{
