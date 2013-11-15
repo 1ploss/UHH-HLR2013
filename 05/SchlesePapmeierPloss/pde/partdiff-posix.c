@@ -19,6 +19,7 @@
 /* Include standard header file.                                            */
 /* ************************************************************************ */
 #define _POSIX_C_SOURCE 200809L
+#define JOBSIZE 5
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -188,6 +189,8 @@ typedef struct
 	double   fpisin;
 	int i;
 	int j;
+	int iEnde;
+	int jEnde;
 	double result;
 } args_t;
 
@@ -219,6 +222,47 @@ double calculate_in_a_thread(void* arg)
 	double residuum = Matrix_In[i][j] - star;
 	residuum = (residuum < 0) ? -residuum : residuum;
 	return residuum;
+}
+
+double calculate_in_a_thread_group(void* arg)
+{
+	args_t* args = (args_t*)arg;
+	double fpisin_i = 0.0;
+
+	double** Matrix_In = args->Matrix_In;
+	double** Matrix_Out = args->Matrix_Out;
+	double   pih = args->pih;
+	double   fpisin = args->fpisin;
+	double maxresiduum=0;
+	int i = args->i;
+	int j = args->j;
+	int iEnde = args->iEnde;
+	int jEnde = args->jEnde;
+
+	for(;i<iEnde;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
+	{
+		for(;j<jEnde;j++)
+		{
+			if (args->options->inf_func == FUNC_FPISIN)
+				{
+					fpisin_i = fpisin * sin(pih * (double)i);
+				}
+
+				double star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+
+				if (args->options->inf_func == FUNC_FPISIN)
+				{
+					star += fpisin_i * sin(pih * (double)j);
+				}
+
+				Matrix_Out[i][j] = star;
+				double residuum = Matrix_In[i][j] - star;
+				residuum = (residuum < 0) ? -residuum : residuum;
+				maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;//Dies musste natürlich wieder aus allen residien gesucht werden.
+		}
+	}
+
+	return maxresiduum;
 }
 
 /* ************************************************************************ */
@@ -272,10 +316,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		maxresiduum = 0;
 
 		/* over all rows */
-		for (i = 1; i < N; i++)
+		for (i = 1; i < N; i+=JOBSIZE)//Jede Schleife springt jetzt eine bestimmte Weite
 		{
 			/* over all columns */
-			for (j = 1; j < N; j++)
+			for (j = 1; j < N; j+=JOBSIZE)
 			{
 				double residuum;
 				again:
@@ -294,8 +338,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].fpisin = fpisin;
 				args[arg_index].i = i;
 				args[arg_index].j = j;
+				args[arg_index].iEnde = i+JOBSIZE;//Definiert die Endindize der zu berechnenden Gruppe
+				args[arg_index].jEnde = j+JOBSIZE;
 
-				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread, &args[arg_index]))
+				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread_group, &args[arg_index]))
 				{
 					goto again;
 				}
