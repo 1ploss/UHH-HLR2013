@@ -195,10 +195,10 @@ int thread_pool_try_submit_job(struct thread_pool_t* pool, thread_job_t function
 			sem_post(&thread->start_sem);
 			DEBUG_PRINT_SEM(&thread->start_sem);
 			DEBUG_PRINT_SEM(thread->thread_done_sem);
-			return 0;
+			return 1;
 		}
 	}
-	return -1;
+	return 0;
 }
 
 

@@ -239,6 +239,8 @@ double calculate_in_a_thread_group(void* arg)
 	int j = args->j;
 	int iEnde = args->iEnde;
 	int jEnde = args->jEnde;
+	fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, i + iEnde, j, j + jEnde);
+
 	int N = args->N;
 
 	for(;i<iEnde&&i<N;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
@@ -405,6 +407,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 					}
 				}
 
+
 				args[arg_index].options = options;
 				args[arg_index].Matrix_In = Matrix_In;
 				args[arg_index].Matrix_Out = Matrix_Out;
@@ -416,7 +419,9 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].jEnde = j+JOBSIZE;
 				args[arg_index].N = N;
 
-				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread_rows, &args[arg_index]))
+				__sync_synchronize(); // zum debuggen, eigentlich nicht nötig.
+
+				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread_group, &args[arg_index]))
 				{
 					goto again;
 				}
