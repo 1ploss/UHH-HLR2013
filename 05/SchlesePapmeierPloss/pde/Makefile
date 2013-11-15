@@ -19,4 +19,4 @@ partdiff-posix: $(OBJS) Makefile
 	$(CC) $(LFLAGS) -o $@ $(OBJS) $(LIBS)
 
 clean:
-	$(RM) *.o *~
+	$(RM) *.o *~ partdiff-posix
