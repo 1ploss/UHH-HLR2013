@@ -264,13 +264,15 @@ int thread_pool_retrieve_result(struct thread_pool_t* pool, THREAD_RESULT_TYPE* 
 // ok busy waiting is not the best way, but it's enough
 void thread_pool_barrier(struct thread_pool_t* pool)
 {
-	int semv;
-	do
+	for (unsigned i = 0; i < pool->num_threads; ++i)
 	{
-		sem_trywait(&pool->thread_done_sem);
-		sem_getvalue(&pool->thread_done_sem, &semv);
+		thread_t* thread = &pool->threads[i];
+		assert(thread->thread_done_sem == &pool->thread_done_sem);
+		if (thread->is_done != IS_DONE_COOKIE)
+		{
+			i = 0;
+		}
 	}
-	while (semv != 0);
 }
 
 
