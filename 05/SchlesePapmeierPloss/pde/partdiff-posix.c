@@ -353,6 +353,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		}
 
 		thread_pool_barrier(pool);
+		fprintf(stderr, "barrier\n");
 		double residuum;
 		while (thread_pool_retrieve_result(pool, &residuum, &timeout))
 		{
@@ -385,6 +386,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	}
 
 	results->m = m2;
+	fprintf(stderr, "destroying pool\n");
 	thread_pool_destroy(pool);
 }
 
