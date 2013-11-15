@@ -192,6 +192,7 @@ typedef struct
 	int iEnde;
 	int jEnde;
 	double result;
+	int N;
 } args_t;
 
 double calculate_in_a_thread(void* arg)
@@ -240,9 +241,11 @@ double calculate_in_a_thread_group(void* arg)
 	int jEnde = args->jEnde;
 	fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, i + iEnde, j, j + jEnde);
 
-	for(;i<iEnde;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
+	int N = args->N;
+
+	for(;i<iEnde&&i<N;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
 	{
-		for(;j<jEnde;j++)
+		for(;j<jEnde&&i<N;j++)
 		{
 			if (args->options->inf_func == FUNC_FPISIN)
 				{
@@ -261,6 +264,42 @@ double calculate_in_a_thread_group(void* arg)
 				residuum = (residuum < 0) ? -residuum : residuum;
 				maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;//Dies musste natürlich wieder aus allen residien gesucht werden.
 		}
+	}
+
+	return maxresiduum;
+}
+
+double calculate_in_a_thread_rows(void* arg)
+{
+	args_t* args = (args_t*)arg;
+	double fpisin_i = 0.0;
+
+	double** Matrix_In = args->Matrix_In;
+	double** Matrix_Out = args->Matrix_Out;
+	double   pih = args->pih;
+	double   fpisin = args->fpisin;
+	double maxresiduum=0;
+	int i = args->i;
+	int j = args->j;
+	int iEnde = args->iEnde;
+
+	int N = args->N;
+
+	for(;i<iEnde&&i<N;i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
+	{
+		if (args->options->inf_func == FUNC_FPISIN)
+			{
+				fpisin_i = fpisin * sin(pih * (double)i);
+			}
+				double star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+				if (args->options->inf_func == FUNC_FPISIN)
+			{
+				star += fpisin_i * sin(pih * (double)j);
+			}
+				Matrix_Out[i][j] = star;
+			double residuum = Matrix_In[i][j] - star;
+			residuum = (residuum < 0) ? -residuum : residuum;
+			maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;//Dies musste natürlich wieder aus allen residien gesucht werden.
 	}
 
 	return maxresiduum;
@@ -342,6 +381,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].j = j;
 				args[arg_index].iEnde = i+JOBSIZE;//Definiert die Endindize der zu berechnenden Gruppe
 				args[arg_index].jEnde = j+JOBSIZE;
+				args[arg_index].N = N;
 
 				__sync_synchronize(); // zum debuggen, eigentlich nicht nötig.
 
