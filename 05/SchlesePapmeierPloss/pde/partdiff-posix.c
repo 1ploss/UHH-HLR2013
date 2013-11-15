@@ -262,6 +262,8 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		fpisin = 0.25 * TWO_PI_SQUARE * h * h;
 	}
 
+	struct timespec timeout = { 0 , 100 * 1000 };
+
 	while (term_iteration > 0)
 	{
 		double** Matrix_Out = arguments->Matrix[m1];
@@ -275,9 +277,10 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			/* over all columns */
 			for (j = 1; j < N; j++)
 			{
-				if (i > 1 || j > (int)options->number)
+				double residuum;
+				again:
+				if (thread_pool_retrieve_result(pool, &residuum, &timeout))
 				{
-					double residuum = (double)thread_pool_retrieve_result(pool);
 					if (args->options->termination == TERM_PREC || term_iteration == 1)
 					{
 						maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
@@ -292,18 +295,18 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].i = i;
 				args[arg_index].j = j;
 
-				if (thread_pool_try_submit_job(pool, calculate_in_a_thread, &args[arg_index]))
+				if (!thread_pool_try_submit_job(pool, calculate_in_a_thread, &args[arg_index]))
 				{
-					printf("no free thread, where it should have been one i: %i, j: %i!", i, j);
-					exit(1);
+					goto again;
 				}
 				arg_index = (arg_index + 1) % ARRAY_SIZE(args);
 			}
 		}
 
-		for (unsigned i = 0; i < options->number; ++i)
+		thread_pool_barrier(pool);
+		double residuum;
+		while (thread_pool_retrieve_result(pool, &residuum, &timeout))
 		{
-			double residuum = (double)thread_pool_retrieve_result(pool);
 			if (args->options->termination == TERM_PREC || term_iteration == 1)
 			{
 				maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
