@@ -239,7 +239,7 @@ double calculate_in_a_thread_group(void* arg)
 	int j = args->j;
 	int iEnde = args->iEnde;
 	int jEnde = args->jEnde;
-	//fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, iEnde, j, jEnde);
+	fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, iEnde, j, jEnde);
 
 
 	for(; i < iEnde; i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
@@ -346,7 +346,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	}
 
 	struct timespec timeout = { 0 , 100 * 1000 };
-
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
 	while (term_iteration > 0)
 	{
 		double** Matrix_Out = arguments->Matrix[m1];
@@ -377,8 +377,8 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				args[arg_index].fpisin = fpisin;
 				args[arg_index].i = i;
 				args[arg_index].j = j;
-				args[arg_index].iEnde = i + JOBSIZE;//Definiert die Endindize der zu berechnenden Gruppe
-				args[arg_index].jEnde = j + JOBSIZE;
+				args[arg_index].iEnde = MIN(i + JOBSIZE, N);//Definiert die Endindize der zu berechnenden Gruppe
+				args[arg_index].jEnde = MIN(j + JOBSIZE, N);
 				args[arg_index].N = N;
 
 				__sync_synchronize(); // zum debuggen, eigentlich nicht nötig.
