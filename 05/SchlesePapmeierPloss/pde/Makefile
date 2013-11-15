@@ -3,8 +3,8 @@ CC = gcc
 
 # Compiler flags, paths and libraries
 CFLAGS = -std=c99 -pedantic -Wall -Wextra -O0 -ggdb
-LFLAGS = $(CFLAGS) -lpthread
-LIBS   = -lm
+LFLAGS = 
+LIBS   = -lm -lpthread -lrt
 
 OBJS = thread_pool.o partdiff-posix.o askparams.o
 
