@@ -239,7 +239,7 @@ double calculate_in_a_thread_group(void* arg)
 	int j = args->j;
 	int iEnde = args->iEnde;
 	int jEnde = args->jEnde;
-	fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, iEnde, j, jEnde);
+	//fprintf(stderr, "%p %p %p (%i..%i, %i..%i)\n	", (void*)Matrix_In, (void*)Matrix_Out, arg, i, iEnde, j, jEnde);
 
 
 	for(; i < iEnde; i++)//Nun macht jeder Thread pro Job eine Menge an Berechnungen
@@ -429,7 +429,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		}
 
 		thread_pool_barrier(pool);
-		fprintf(stderr, "barrier\n");
+		//fprintf(stderr, "barrier\n");
 		double residuum;
 		while (thread_pool_retrieve_result(pool, &residuum, &timeout))
 		{

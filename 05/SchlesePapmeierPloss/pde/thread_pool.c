@@ -1,7 +1,7 @@
 /*
  ============================================================================
  Name        : queue.c
- Author      : 
+ Author      :
  Version     :
  Copyright   : Your copyright notice
  Description : Hello World in C, Ansi-style
@@ -272,6 +272,8 @@ void thread_pool_barrier(struct thread_pool_t* pool)
 		{
 			i = 0;
 		}
+		//__sync_synchronize();
+		compiler_barrier;
 	}
 }
 
