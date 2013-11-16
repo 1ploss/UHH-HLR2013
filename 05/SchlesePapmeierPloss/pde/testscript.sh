@@ -1,4 +1,5 @@
 #!/bin/bash
+# This is a script we used to run tests.
 # 1 - presigion, 2 - iterations
 METHOD=1
 PRECISION=7e-08

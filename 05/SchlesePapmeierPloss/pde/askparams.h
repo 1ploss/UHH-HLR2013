@@ -1,3 +1,3 @@
 /**
- * Placeholder for now.
+ * Placeholder, because of the %.o : %.c %.h rule in Makefile
  */
