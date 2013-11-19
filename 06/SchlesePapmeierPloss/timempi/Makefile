@@ -10,15 +10,18 @@ LIBS   = -lm -lmpi
 OBJS = timempi.o
 EXE = timempi
 
-# Rule to create *.o from *.c
-%.o : %.c %.h
-	$(CC) -c $< $(CFLAGS)
-
 # Targets ...
 all: $(EXE)
 
 $(EXE): $(OBJS) Makefile
 	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
 
+# Rule to create *.o from *.c
+%.o : %.c %.h
+	$(CC) -c $< $(CFLAGS)
+
 clean:
 	$(RM) $(OBJS) *~ $(EXE)
+
+run:
+	mpirun -np 4 $(EXE)
