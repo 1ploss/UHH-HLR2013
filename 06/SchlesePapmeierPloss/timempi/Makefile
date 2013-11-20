@@ -25,3 +25,7 @@ clean:
 
 run:
 	mpirun -np 4 $(EXE)
+
+cluster_run:
+	srun mpirun -np 24 $(EXE)
+	

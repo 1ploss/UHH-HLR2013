@@ -14,8 +14,13 @@
 #define COMM_BUFF_SZ 250
 #define TAG_HOSTNAME_TIMESTAMP 1
 #define TAG_DIE_DIE_DIE 2
+#ifdef DEBUG
 #define SLAVE_LOG(...) fprintf(stdout, "slave: "__VA_ARGS__);
 #define MASTER_LOG(...) fprintf(stdout, "master: "__VA_ARGS__);
+#else
+#define SLAVE_LOG(...)
+#define MASTER_LOG(...)
+#endif
 
 #define SLAVE_WAIT_FOR_RELEASE
 
