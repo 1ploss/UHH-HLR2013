@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <time.h>
+#include <assert.h>
 
 #define COMM_BUFF_SZ 250
 #define TAG_HOSTNAME_TIMESTAMP 1
@@ -31,7 +32,23 @@ void print_info()
 					version, subversion, num_tasks, hostname);
 }
 
-void master(int rc)
+static void slaves_ask_exit()
+{
+	char buff;
+	int num_tasks;
+	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+	for (int i = 1; i < num_tasks; ++i)
+	{
+		MPI_Send(&buff,					/* message buffer */
+				 0,					/* number of data items */
+				 MPI_SIGNED_CHAR,	/* data item is an integer */
+				 i,		/* destination process rank */
+				 TAG_DIE_DIE_DIE,	/* user chosen message tag */
+				 MPI_COMM_WORLD);   /* default communicator */
+	}
+}
+
+void master()
 {
 	int num_tasks;
 	char buff[COMM_BUFF_SZ];
@@ -53,7 +70,7 @@ void master(int rc)
     int MPI_ERROR;
  */
 	// expecting messages from rank 1+
-	for (int num_msgs = 1;; num_msgs++)
+	for (int num_msgs = 1; num_msgs < num_tasks; num_msgs++)
 	{
 		MPI_Recv(&buff,           /* message buffer */
 				 sizeof(buff),                 /* one data item */
@@ -73,12 +90,12 @@ void master(int rc)
 		if (id_offset >= num_tasks)
 		{
 			fprintf(stderr, "task rank is out of range");
-			MPI_Abort(MPI_COMM_WORLD, rc); // Bye bye cruel world
+			MPI_Abort(MPI_COMM_WORLD, 3); // Bye bye cruel world
 		}
 		else if (received[id_offset] != 0)
 		{
 			fprintf(stderr, "2 messages from the same rank");
-			MPI_Abort(MPI_COMM_WORLD, rc); // Bye bye cruel world
+			MPI_Abort(MPI_COMM_WORLD, 4); // Bye bye cruel world
 		}
 		else
 		{
@@ -88,45 +105,29 @@ void master(int rc)
 			memcpy(received[id_offset], buff, msg_size);
 			*(received[id_offset] + msg_size) = 0;
 		}
+	}
 
-		if (num_msgs == num_slave_tasks)
+	MASTER_LOG("evaluating all messages\n");
+	for (int i = 0; i < num_slave_tasks; ++i)
+	{
+		if (received[i] == 0)
 		{
-			MASTER_LOG("evaluating all messages\n");
-			for (int i = 0; i < num_slave_tasks; ++i)
-			{
-				if (received[i] == 0)
-				{
-					fprintf(stderr, "haven't received from process %i\n", i + 1);
-					MPI_Abort(MPI_COMM_WORLD, rc); // Bye bye cruel world
-				}
-			}
-
-			MASTER_LOG("received all messages\n");
-			/* received all messages, now printing them out: */
-			for (int i = 0; i < num_slave_tasks; ++i)
-			{
-				fprintf(stdout, "%s \n", received[i]);
-				free(received[i]);
-			}
-
-#ifdef SLAVE_WAIT_FOR_RELEASE
-			for (int i = 0; i < num_slave_tasks; ++i)
-			{
-				MPI_Send(received,					/* message buffer */
-						 0,					/* number of data items */
-						 MPI_SIGNED_CHAR,	/* data item is an integer */
-						 (int)i + 1,		/* destination process rank */
-						 TAG_DIE_DIE_DIE,	/* user chosen message tag */
-						 MPI_COMM_WORLD);   /* default communicator */
-			}
-#endif
-			break;
+			fprintf(stderr, "haven't received from process %i\n", i + 1);
+			MPI_Abort(MPI_COMM_WORLD, 5); // Bye bye cruel world
 		}
+	}
+
+	MASTER_LOG("received all messages\n");
+	/* received all messages, now printing them out: */
+	for (int i = 0; i < num_slave_tasks; ++i)
+	{
+		fprintf(stdout, "%s \n", received[i]);
+		free(received[i]);
 	}
 }
 
 
-int fill_timestamp(char* buff, unsigned buffsz)
+int fill_timestamp(char* buff, unsigned buffsz, long* microseconds)
 {
 	char            fmt[64];
 	struct timeval  tv;
@@ -138,6 +139,7 @@ int fill_timestamp(char* buff, unsigned buffsz)
 	}
 	else
 	{
+		*microseconds = tv.tv_usec;
 		if((tm = localtime(&tv.tv_sec)) != NULL)
 		{
 			strftime(fmt, sizeof fmt, "%Y-%m-%d %H:%M:%S.%%06u", tm);
@@ -151,27 +153,32 @@ int fill_timestamp(char* buff, unsigned buffsz)
     return result;
 }
 
-void slave(int rc)
+long slave()
 {
 	int rank;
+	long microseconds;
+
 	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 	SLAVE_LOG("%i: starting\n", rank);
 
 	char buff[COMM_BUFF_SZ];
-	if (gethostname(buff, sizeof buff))
+	int buff_len = snprintf(buff, COMM_BUFF_SZ, "%i: ", rank);
+	assert(buff_len > 0 && buff_len < COMM_BUFF_SZ);
+	if (gethostname(buff + buff_len, COMM_BUFF_SZ - buff_len))
 	{
 		perror("gethostname");
-		MPI_Abort(MPI_COMM_WORLD, rc); // Bye bye cruel world
+		MPI_Abort(MPI_COMM_WORLD, 1); // Bye bye cruel world
 	}
-	buff[(sizeof buff) - 1] = 0; // just in case
-	unsigned buff_len = strlen(buff);
+	buff[COMM_BUFF_SZ - 1] = 0; // just in case
+	buff_len = strlen(buff);
+	assert(buff_len < (COMM_BUFF_SZ - 3) && "buffer size too small");
 	buff[buff_len++] = ':';
 	buff[buff_len++] = ' ';
-	int result = fill_timestamp(&buff[buff_len], COMM_BUFF_SZ - buff_len);
+	int result = fill_timestamp(&buff[buff_len], COMM_BUFF_SZ - buff_len, &microseconds);
 	if (result <= 0)
 	{
 		printf("fill_timestamp");
-		MPI_Abort(MPI_COMM_WORLD, rc); // Bye bye cruel world
+		MPI_Abort(MPI_COMM_WORLD, 2); // Bye bye cruel world
 	}
 	buff_len += result;
 
@@ -183,7 +190,12 @@ void slave(int rc)
              TAG_HOSTNAME_TIMESTAMP,	/* user chosen message tag */
              MPI_COMM_WORLD);   		/* default communicator */
 
-#ifdef SLAVE_WAIT_FOR_RELEASE
+    return microseconds;
+}
+
+void slave_wait()
+{
+	char buff;
     MPI_Status status;
 	MPI_Recv(&buff,           /* message buffer */
 			 sizeof(buff),                 /* one data item */
@@ -192,9 +204,7 @@ void slave(int rc)
 			 TAG_DIE_DIE_DIE , // use MPI_ANY_TAG for any type of message
 			 MPI_COMM_WORLD,    /* default communicator */
 			 &status);          /* info about the received message */
-#endif
 }
-
 
 int main(int argc, char* argv[])
 {
@@ -202,23 +212,43 @@ int main(int argc, char* argv[])
 	if (rc != MPI_SUCCESS)
 	{
 		fprintf (stderr, "MPI_Init failed!\n");
-		MPI_Abort(MPI_COMM_WORLD, rc); // Bye bye cruel world
+		exit(1); // Bye bye cruel world
 	}
 
 	int rank;
+	long us_local = 99999999999;
+	long us_global = 99999999999;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	if (rank == 0)
 	{
 		print_info();
-		master(rc);
+		master();
 	}
 	else
 	{
-		slave(rc);
+		us_local = slave();
 	}
 
-	printf("Rang %i beendet jetzt!\n", rank);
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	MPI_Reduce(&us_local, &us_global, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+
+	if (rank == 0)
+	{
+		printf("%li\n", us_global);
+#ifdef SLAVE_WAIT_FOR_RELEASE
+		slaves_ask_exit();
+#endif
+	}
+	else
+	{
+#ifdef SLAVE_WAIT_FOR_RELEASE
+		slave_wait();
+#endif
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("Rang %i beendet jetzt!\n", rank);
 	MPI_Finalize();
 	return 0;
 }
