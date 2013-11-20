@@ -222,7 +222,10 @@ int main(int argc, char* argv[])
 
 	int rank;
 	long us_local = 99999999999;
+
+#ifdef DO_REDUCE
 	long us_global = 99999999999;
+#endif
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	if (rank == 0)
 	{
@@ -234,23 +237,27 @@ int main(int argc, char* argv[])
 		us_local = slave();
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
-
+#ifdef DO_REDUCE
 	MPI_Reduce(&us_local, &us_global, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
 
 	if (rank == 0)
 	{
 		printf("%li\n", us_global);
-#ifdef SLAVE_WAIT_FOR_RELEASE
-		slaves_ask_exit();
+	}
+#else
+	(void)us_local;
 #endif
+
+#ifdef SLAVE_WAIT_FOR_RELEASE
+	if (rank == 0)
+	{
+		slaves_ask_exit();
 	}
 	else
 	{
-#ifdef SLAVE_WAIT_FOR_RELEASE
 		slave_wait();
-#endif
 	}
+#endif
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	printf("Rang %i beendet jetzt!\n", rank);
