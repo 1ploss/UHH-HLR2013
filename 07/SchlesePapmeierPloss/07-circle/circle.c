@@ -55,27 +55,32 @@ unsigned circle(int* buffers[], unsigned buffsz)
 	 */
 	if (rank == 0)
 	{
-		MPI_Send(buffers[0], 1, MPI_INT, last_rank, TAG_INITIAL_COMM, MPI_COMM_WORLD);
+		LOG("0: sending target: %i\n", *buffers[send_buff_index]);
+		MPI_Send(buffers[send_buff_index], 1, MPI_INT, last_rank, TAG_INITIAL_COMM, MPI_COMM_WORLD);
 	}
 	else if (rank == last_rank)
 	{
 		MPI_Recv(&target, 1, MPI_INT, 0, TAG_INITIAL_COMM, MPI_COMM_WORLD, &status);
+		LOG("%i: received target: %i\n", last_rank, target);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	//return;
 
 	/**
 	 * Main send/receive loop
 	 */
-	for (;;)
+	for (unsigned iteration = 0; iteration < 10; iteration++)
 	{
 		MPI_Request send_request, recv_request;
-		MPI_Isend(buffers[recv_buff_index],						/* message buffer */
+		MPI_Isend(buffers[send_buff_index],						/* message buffer */
 				 buffsz,						/* number of data items */
 				 MPI_INT,			/* data item is an integer */
 				 right_rank,							/* destination process rank */
 				 TAG_SEND_RECEIVE,	/* user chosen message tag */
 				 MPI_COMM_WORLD, /* default communicator */
 				 &send_request);
-		MPI_Irecv(buffers[send_buff_index],           /* message buffer */
+		MPI_Irecv(buffers[recv_buff_index],           /* message buffer */
 				 buffsz,                 /* one data item */
 				 MPI_INT,        /* of type double real */
 				 left_rank,    					/* receive from rank 0 */
@@ -85,6 +90,7 @@ unsigned circle(int* buffers[], unsigned buffsz)
 
 		MPI_Wait(&send_request, &status);
 		MPI_Wait(&recv_request, &status);
+		LOG("%i: iteration %u send recv complete\n", rank, iteration);
 
 		/**
 		 * Last rank broadcasts if the termination condition is reached.
@@ -99,6 +105,7 @@ unsigned circle(int* buffers[], unsigned buffsz)
 		}
 
 		MPI_Bcast(&dummy, 1, MPI_SIGNED_CHAR, last_rank, MPI_COMM_WORLD);
+		LOG("%i: iteration %u: bcast complete, dummy is %u\n", rank, iteration, dummy);
 
 		if (dummy == CMD_DO_STOP)
 		{
@@ -116,7 +123,7 @@ int main(int argc, char** argv)
 	if (rc != MPI_SUCCESS)
 	{
 		fprintf (stderr, "MPI_Init failed!\n");
-		MPI_Abort(MPI_COMM_WORLD, 1);
+		exit (EXIT_FAILURE);
 	}
 
 	unsigned N;
@@ -163,10 +170,9 @@ int main(int argc, char** argv)
 
 		for (unsigned i = 0; i < chunk_size; i++)
 		{
-			printf("rank %d: %d\n", rank, buffers[0][i]);
+			printf("rank %d: %d\n", rank, buffers[1][i]);
 		}
 
-		MPI_Barrier(MPI_COMM_WORLD);
 		unsigned recv_buff_index = circle(buffers, chunk_size);
 		printf("\nAFTER\n");
 
