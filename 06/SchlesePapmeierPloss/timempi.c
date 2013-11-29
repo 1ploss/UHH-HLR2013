@@ -106,6 +106,7 @@ void master()
 		{
 			MASTER_LOG("received message of size %i\n", msg_size);
 
+			//Eingehende Nachrichten werden in Reihenfolge der Sender-ID gespeichert
 			received[id_offset] = malloc(msg_size + 1);
 			memcpy(received[id_offset], buff, msg_size);
 			*(received[id_offset] + msg_size) = 0;
