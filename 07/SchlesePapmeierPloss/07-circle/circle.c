@@ -4,7 +4,7 @@
 #include <time.h>
 #include <limits.h>
 #include <mpi.h>
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
 #define LOG(...) fprintf(stderr, __VA_ARGS__);
 #else
@@ -24,7 +24,7 @@ int* init(unsigned N,unsigned items)
 	{
 		buf[i] = rand() % 25; //do not modify %25
 	}
-	if(N>items)//Überschüssige Speicherplätze werden mit -1 belegt
+	if(N>items)//jedem Datensatz, welcher kürzer ist, als der längste Datensatz ist eine -1 angehängt, um die Längen zu vereinheitlichen
 	{
 		buf[items]= -1;
 	}
@@ -156,8 +156,13 @@ int main(int argc, char** argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
 	if((unsigned)num_tasks > N)
 	{
-		printf("There are not enough elements to distribute them on the processes!\n");
-		MPI_Abort(MPI_COMM_WORLD, 4);
+		
+		MPI_Finalize();
+		if(rank==0)
+		{
+			printf("There are not enough elements to distribute them to the processes!\n");
+		}
+		return 0;
 		//Ich hab mich mal an das gehalten, was in der einen Email stand.
 	}
 
@@ -179,7 +184,7 @@ int main(int argc, char** argv)
 		for (unsigned i = 0; i < chunk_size; i++)
 		{
 			wert = buffers[1][i];
-			if(wert>0)
+			if(wert>0)//Die längenvereinheitlichenden -1en werden nicht ausgegeben
 			{
 				printf("rank %d: %d\n", rank, wert);
 			}
@@ -191,7 +196,7 @@ int main(int argc, char** argv)
 		for (unsigned j = 0; j < chunk_size; j++)
 		{
 			wert = buffers[recv_buff_index][j];
-			if(wert>0)
+			if(wert>0)//Die längenvereinheitlichenden -1en werden nicht ausgegeben
 			{
 				printf("rank %d: %d\n", rank, wert);
 			}
