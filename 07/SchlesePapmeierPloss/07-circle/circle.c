@@ -16,7 +16,9 @@ int* init(unsigned N)
 {
 	int *buf = malloc(sizeof(int) * N);
 
-	srand(time(NULL));
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	srand(time(NULL)+ rank);
 
 	for (unsigned i = 0; i < N; i++)
 	{
@@ -95,19 +97,20 @@ unsigned circle(int* buffers[], unsigned buffsz)
 		/**
 		 * Last rank broadcasts if the termination condition is reached.
 		 */
-		char dummy = CMD_DO_CIRCLE;
+		unsigned cmd = CMD_DO_CIRCLE;
 		if (rank == last_rank) // master
 		{
-			if (buffers[recv_buff_index][0] != target)
+			if (buffers[recv_buff_index][0] == target)
 			{
-				dummy = CMD_DO_STOP;
+				LOG("!!!!!!%i: iteration %u: target reached!\n", rank, iteration);
+				cmd = CMD_DO_STOP;
 			}
 		}
 
-		MPI_Bcast(&dummy, 1, MPI_SIGNED_CHAR, last_rank, MPI_COMM_WORLD);
-		LOG("%i: iteration %u: bcast complete, dummy is %u\n", rank, iteration, dummy);
+		MPI_Bcast(&cmd, 1, MPI_UNSIGNED, last_rank, MPI_COMM_WORLD);
+		LOG("%i: iteration %u: bcast complete, dummy is %u\n", rank, iteration, cmd);
 
-		if (dummy == CMD_DO_STOP)
+		if (cmd == CMD_DO_STOP)
 		{
 			return recv_buff_index;
 		}
