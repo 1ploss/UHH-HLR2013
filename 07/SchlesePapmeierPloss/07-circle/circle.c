@@ -12,7 +12,7 @@
 #endif
 
 
-int* init(unsigned N)
+int* init(unsigned N,unsigned items)
 {
 	int *buf = malloc(sizeof(int) * N);
 
@@ -20,9 +20,13 @@ int* init(unsigned N)
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	srand(time(NULL)+ rank);
 
-	for (unsigned i = 0; i < N; i++)
+	for (unsigned i = 0; i < items; i++)
 	{
 		buf[i] = rand() % 25; //do not modify %25
+	}
+	if(N>items)//Überschüssige Speicherplätze werden mit -1 belegt
+	{
+		buf[items]= -1;
 	}
 
 	return buf;
@@ -88,7 +92,7 @@ unsigned circle(int* buffers[], unsigned buffsz)
 		MPI_Irecv(buffers[recv_buff_index],           /* message buffer */
 				 buffsz,                 /* one data item */
 				 MPI_INT,        /* of type double real */
-				 left_rank,    					/* receive from rank 0 */
+				 left_rank,    					/* receive from left rank */
 				 TAG_SEND_RECEIVE , // use MPI_ANY_TAG for any type of message
 				 MPI_COMM_WORLD,    /* default communicator */
 				 &recv_request);          /* info about the received message */
@@ -108,8 +112,8 @@ unsigned circle(int* buffers[], unsigned buffsz)
 				LOG("!!!!!!%i: iteration %u: target reached!\n", rank, iteration);
 				cmd = CMD_DO_STOP;
 			}
-		}
 
+		}
 		MPI_Bcast(&cmd, 1, MPI_UNSIGNED, last_rank, MPI_COMM_WORLD);
 		LOG("%i: iteration %u: bcast complete, dummy is %u\n", rank, iteration, cmd);
 
@@ -119,6 +123,7 @@ unsigned circle(int* buffers[], unsigned buffsz)
 		}
 
 		SWAP(recv_buff_index, send_buff_index)
+		//MPI_Barrier(MPI_COMM_WORLD);
 	}
 	return recv_buff_index;
 }
@@ -149,34 +154,35 @@ int main(int argc, char** argv)
 	int rank, num_tasks;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
-
+	if((unsigned)num_tasks > N)
+	{
+		printf("There are not enough elements to distribute them on the processes!\n");
+		MPI_Abort(MPI_COMM_WORLD, 4);
+		//Ich hab mich mal an das gehalten, was in der einen Email stand.
+	}
 
 	div_t d = div(N, num_tasks);
-	unsigned chunk_size = d.quot + (d.rem != 0);
-	unsigned offset = rank * chunk_size;
-	if (offset < N)
+	unsigned chunk_size = d.quot + (d.rem != 0);//Der Platz der in jedem Prozess zur Verfügung stehen muss
+	unsigned items = chunk_size;//Die Anzahl von Elementen, die am Anfang im Array sein sollen
+	int wert;//Lokale Variable, die dafür notwendig ist, ungültige Arraywerte heraus zu filtern
+	if((d.rem!=0) && rank>=d.rem)
 	{
-		if (offset + chunk_size > N)
-		{
-			chunk_size = N - offset;
-		}
-
-		if (rank < 0 || offset + chunk_size > (unsigned)INT_MAX)
-		{
-			MPI_Abort(MPI_COMM_WORLD, 4);
-		}
-
-		LOG("Rank: %i, N: %u, chunk_size %u, offset %u\n", rank, N, chunk_size, offset);
+		items--;
+	}
 
 		int* buffers[2];
-		buffers[0] = init(chunk_size);
-		buffers[1] = init(chunk_size);
+		buffers[0] = init(chunk_size,items);
+		buffers[1] = init(chunk_size,items);
 
 		printf("\nBEFORE\n");
 
 		for (unsigned i = 0; i < chunk_size; i++)
 		{
-			printf("rank %d: %d\n", rank, buffers[1][i]);
+			wert = buffers[1][i];
+			if(wert>0)
+			{
+				printf("rank %d: %d\n", rank, wert);
+			}
 		}
 
 		unsigned recv_buff_index = circle(buffers, chunk_size);
@@ -184,17 +190,17 @@ int main(int argc, char** argv)
 
 		for (unsigned j = 0; j < chunk_size; j++)
 		{
-			printf("rank %d: %d\n", rank, buffers[recv_buff_index][j]);
+			wert = buffers[recv_buff_index][j];
+			if(wert>0)
+			{
+				printf("rank %d: %d\n", rank, wert);
+			}
 		}
 
 		free(buffers[0]);
 		free(buffers[1]);
-	}
-	else
-	{
-		printf("rank %d: unused\n", rank);
-	}
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
 	return EXIT_SUCCESS;
 }
