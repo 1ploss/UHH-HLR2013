@@ -28,14 +28,17 @@ int* init(unsigned N)
 	return buf;
 }
 
-
 #define TAG_INITIAL_COMM 1
-#define CMD_DO_CIRCLE 2
-#define CMD_DO_STOP 3
+#define TAG_SEND_RECEIVE 2
 
-#define TAG_SEND_RECEIVE 4
+// used as broadcast data
+#define CMD_DO_CIRCLE 3
+#define CMD_DO_STOP 4
 
 #define SWAP(a, b) b = a ^ b; a = b ^ a; b = a ^ b;
+
+//#define ITERATIONS_PREDICATE iteration < 10
+#define ITERATIONS_PREDICATE
 
 /**
  * @return index of the last receiving buffer.
@@ -72,7 +75,7 @@ unsigned circle(int* buffers[], unsigned buffsz)
 	/**
 	 * Main send/receive loop
 	 */
-	for (unsigned iteration = 0; iteration < 10; iteration++)
+	for (unsigned iteration = 0; ITERATIONS_PREDICATE; iteration++)
 	{
 		MPI_Request send_request, recv_request;
 		MPI_Isend(buffers[send_buff_index],						/* message buffer */
