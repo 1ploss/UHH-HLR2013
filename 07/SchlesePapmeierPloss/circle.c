@@ -4,7 +4,7 @@
 #include <time.h>
 #include <limits.h>
 #include <mpi.h>
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define LOG(...) fprintf(stderr, __VA_ARGS__);
 #else
@@ -115,7 +115,7 @@ unsigned circle(int* buffers[], unsigned buffsz)
 
 		}
 		MPI_Bcast(&cmd, 1, MPI_UNSIGNED, last_rank, MPI_COMM_WORLD);
-		LOG("%i: iteration %u: bcast complete, dummy is %u\n", rank, iteration, cmd);
+		LOG("%i: iteration %u: bcast complete, cmd is %u\n", rank, iteration, cmd);
 
 		if (cmd == CMD_DO_STOP)
 		{
@@ -175,35 +175,35 @@ int main(int argc, char** argv)
 		items--;
 	}
 
-		int* buffers[2];
-		buffers[0] = init(chunk_size,items);
-		buffers[1] = init(chunk_size,items);
+	int* buffers[2];
+	buffers[0] = init(chunk_size,items);
+	buffers[1] = init(chunk_size,items);
 
-		printf("\nBEFORE\n");
+	printf("\nBEFORE\n");
 
-		for (unsigned i = 0; i < chunk_size; i++)
+	for (unsigned i = 0; i < chunk_size; i++)
+	{
+		wert = buffers[1][i];
+		if(wert >= 0)//Die längenvereinheitlichenden -1en werden nicht ausgegeben
 		{
-			wert = buffers[1][i];
-			if(wert>0)//Die längenvereinheitlichenden -1en werden nicht ausgegeben
-			{
-				printf("rank %d: %d\n", rank, wert);
-			}
+			printf("rank %d: %d\n", rank, wert);
 		}
+	}
 
-		unsigned recv_buff_index = circle(buffers, chunk_size);
-		printf("\nAFTER\n");
+	unsigned recv_buff_index = circle(buffers, chunk_size);
+	printf("\nAFTER\n");
 
-		for (unsigned j = 0; j < chunk_size; j++)
+	for (unsigned j = 0; j < chunk_size; j++)
+	{
+		wert = buffers[recv_buff_index][j];
+		if(wert >= 0)//Die längenvereinheitlichenden -1en werden nicht ausgegeben
 		{
-			wert = buffers[recv_buff_index][j];
-			if(wert>0)//Die längenvereinheitlichenden -1en werden nicht ausgegeben
-			{
-				printf("rank %d: %d\n", rank, wert);
-			}
+			printf("rank %d: %d\n", rank, wert);
 		}
+	}
 
-		free(buffers[0]);
-		free(buffers[1]);
+	free(buffers[0]);
+	free(buffers[1]);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
