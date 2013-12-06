@@ -29,7 +29,7 @@ void init(double** chunk, unsigned first_line, unsigned last_line, unsigned laen
 	{
 		for(int j = 0; j<laenge;j++)
 		{
-			chunk[i][j] = 0.0
+			chunk[i][j] = 0.0;
 		}
 	}
 	/* initialize borders, depending on function (function 2: nothing to do) */
@@ -73,7 +73,7 @@ double compute(double** current, double** next, unsigned first_line, unsigned la
 	}
 	double maxresiduum= 0.0;
 	//Hier gehe ich davon aus, dass first_line nie 0 und last_line nie N ist
-	for(int i = 0; i < (last_line - first_line);i++)
+	for(int i = 1; i < (last_line - first_line -1);i++)
 	{
 		double fpisin_i = 0.0;
 		double iGlobal = i+first_line;
@@ -108,8 +108,23 @@ double compute(double** current, double** next, unsigned first_line, unsigned la
 	return maxresiduum;
 }
 
-void communicate(double** current, double** next, unsigned first_line, unsigned last_line)
+void communicate(double** current, double** next, unsigned first_line, unsigned last_line,unsigned N, int rank, int rankCount)
 {
+	unsigned locallastline = last_line - first_line - 1;
+	if(rank==0)
+	{
+		//TODO nur mit dem unter sich komunizieren
+
+		MPI_Isend(current[locallastline],N,MPI_DOUBLE,rank+1,TAG_SEND_RECEIVE,MPI_COMM_WORLD,&send_request);
+		MPI_Recv(current[locallastline+1],N,MPI_DOUBLE,rank+1,TAG_SEND_RECEIVE,MPI_COMM_WORLD);
+		MPI_Wait(&send_request,&status);
+	}else if(rank==rankCount-1)
+	{
+		//TODO nur mit dem über sich komunizieren
+	}else
+	{
+			//TODO mit oben und unten komunizieren
+	}
 	// TODO
 #if 0
 	MPI_Request send_request, recv_request;
