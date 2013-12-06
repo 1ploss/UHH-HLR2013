@@ -13,5 +13,5 @@ partdiff-par: $(OBJS) Makefile
 all: partdiff-par
 
 clean:
-	rm -f partdiff-par
+	rm *.o ; rm -f partdiff-par
 	
