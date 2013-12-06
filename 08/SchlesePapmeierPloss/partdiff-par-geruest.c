@@ -20,12 +20,39 @@
 /**
  * Initializes the matrix.
  */
-void init(double** chunk, unsigned first_line, unsigned last_line)
+void init(double** chunk, unsigned first_line, unsigned last_line, unsigned laenge, unsigned stoerfunktion, int pNr, int pAnzahl)
 {
-	// TODO
-	/*TODO wir müssen klären, wie wir die Ränder der globalen Matrix verwalten
-	 * Ich gehe für compute erstmal davon aus, dass die Ränder in den Teilmatrizen enthalten sind
-	 */
+	unsigned lines = last_line-first_line;
+	double h = 1.0/(double)laenge;
+	/* initialize matrix with zeros */
+	for(int i=0;i<lines;i++)
+	{
+		for(int j = 0; j<laenge;j++)
+		{
+			chunk[i][j] = 0.0
+		}
+	}
+	/* initialize borders, depending on function (function 2: nothing to do) */
+	if(!stoerfunktion)
+	{
+		for(int i=0;i<lines;i++)
+		{
+			unsigned globali = (i+(pNr*lines));
+			chunk[i][0] = 1.0 - (h * globali);
+			chunk[i][laenge] = h * globali;
+			if(pNr==0)
+			{
+				chunk[0][i] = 1.0 - (h * globali);
+			}
+			if(pNr==pAnzahl-1)
+			{
+				chunk[lines-1][i] = h * globali;
+			}
+		}
+		chunk[laenge][0] = 0.0;
+		chunk[0][laenge] = 0.0;
+		//TODO Es könnte sein, dass die Initialisierung anders ist als die sequentielle, da N irgendwie komisch verwaltet wird
+	}
 }
 
 /**
@@ -178,15 +205,19 @@ int main(int argc, char** argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
 
 	div_t d = div (N, num_tasks);
-	const unsigned num_lines_in_chunk = d.quot + (d.rem != 0) - (rank > d.rem);
-	const unsigned first_line = rank * num_lines_in_chunk;
-	const unsigned last_line = (rank + 1) * num_lines_in_chunk;
+	const unsigned num_lines_in_chunk = d.quot + (d.rem != 0);
+	const unsigned num_lines_in_this_chunk = num_lines_in_chunk - (rank > d.rem);
+	const unsigned first_line = rank * num_lines_in_this_chunk;
+	const unsigned last_line = (rank + 1) * num_lines_in_this_chunk;
 	LOG("%d: num_lines_in_chunk: %u\n", rank, num_lines_in_chunk);
+	LOG("%d: num_lines_in_this_chunk: %u\n", rank, num_lines_in_this_chunk);
 
-	double* chunk[NUM_CHUNKS][num_lines_in_chunk];
+	double** chunk[NUM_CHUNKS][num_lines_in_chunk];
+	//Für die Nachrichtenverschickung müssen alle Matrizen die gleiche Größe haben
+	//TODO sich drum kümmern, dass bei kleinerer lokalen Matrix alles glatt läuft!
+	unsigned long bytes = N * num_lines_in_chunk * sizeof(double);
 	for (unsigned i = 0; i < NUM_CHUNKS; i++)
 	{
-		unsigned long bytes = N * num_lines_in_chunk * sizeof(double);
 		LOG("%d: allocating chunk %u memory of %u bytes\n", rank, i, bytes);
 		double* pool = malloc(bytes);
 		if (pool == 0)
@@ -202,7 +233,7 @@ int main(int argc, char** argv)
 	}
 
 	LOG("%d: main algorithm\n", rank);
-	init(chunk[0], first_line, last_line);
+	init(chunk[0], first_line, last_line,N,stoerfunktion,rank,num_tasks);
 	unsigned curr = 0, next;
 	for (unsigned iter = 0;  stop_after_precision_reached || iter < target_iter; iter++)
 	{
@@ -215,7 +246,7 @@ int main(int argc, char** argv)
 			double reduced_max_residuum;
 			MPI_Reduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
-			if (reduced_max_residuum > target_residuum)
+			if (reduced_max_residuum < target_residuum)
 			{
 				break;
 			}
