@@ -88,14 +88,14 @@ double compute(double** current, double** next, unsigned N, unsigned first_line,
 	}
 	double maxresiduum = 0.0;
 
-	for (unsigned i = 1; i < num_lines - 1; i++)
+	for (unsigned i = 1; i < num_lines + 1; i++)
 	{
 		double fpisin_i = 0.0;
 		unsigned global_line_nr = first_line + i;
 
 		if (use_stoerfunktion)
 		{
-			fpisin_i = fpisin * sin(pih * (double)global_line_nr);
+			fpisin_i = fpisin * sin(pih * global_line_nr);
 		}
 		//Hier gehe ich davon aus, dass die laenge der tatsächlichen Matrix entspricht
 		for (unsigned j = 1; j < (N - 1); j++)
@@ -435,8 +435,12 @@ int main(int argc, char** argv)
 	double*** chunk = allocateMatrices(N, &M);
 	double reduced_max_residuum;
 	LOG("%d: main algorithm\n", rank);
+<<<<<<< HEAD
 	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion);
 
+=======
+	init(chunk[0], first_line, first_line + num_lines-1, N, use_stoerfunktion, rank, num_tasks);
+>>>>>>> 2b9f11b675c3e5ce153a8667e8e364a740e435b0
 	unsigned curr = 0, next;
 	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
