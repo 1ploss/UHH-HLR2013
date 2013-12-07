@@ -69,7 +69,7 @@ void init(double** chunk, unsigned N, unsigned first_line, unsigned num_lines, u
  * @param current ich gehe davon aus, dass die erste Dimension den Zeilen entspricht und die zweite den Spalten
  * @return max residium
  */
-double compute(double** current, double** next, unsigned N, unsigned num_lines, unsigned use_stoerfunktion, unsigned first_gobal_line)
+double compute(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
 {
 	int rank, num_tasks;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -91,7 +91,7 @@ double compute(double** current, double** next, unsigned N, unsigned num_lines, 
 	for (unsigned i = 1; i < num_lines - 1; i++)
 	{
 		double fpisin_i = 0.0;
-		double global_line_nr = first_gobal_line + i;
+		unsigned global_line_nr = first_line + i;
 
 		if (use_stoerfunktion)
 		{
@@ -116,9 +116,56 @@ double compute(double** current, double** next, unsigned N, unsigned num_lines, 
 	return maxresiduum;
 }
 
+#include <omp.h>
 
-#define TAG_SEND_RECEIVE 0
-void communicate(double** current, double** next, unsigned N, unsigned num_lines)
+double compute2(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
+{
+	double maxresiduum = 0;
+	double h = 1.0 / (double)N;
+	double pih = PI * h;
+	double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
+
+	/* over all rows */
+	#pragma omp parallel for
+	for (unsigned i = first_line + 1; i < (first_line + num_lines - 1); i++)
+	{
+		double fpisin_i = 0.0;
+
+		if (use_stoerfunktion)
+		{
+			fpisin_i = fpisin * sin(pih * (double)i);
+		}
+
+		/* over all columns */
+		for (unsigned j = 1; j < N; j++)
+		{
+			double star = 0.25 * (current[i-1][j] + current[i][j-1] + current[i][j+1] + current[i+1][j]);
+
+			if (use_stoerfunktion)
+			{
+				star += fpisin_i * sin(pih * (double)j);
+			}
+
+			//if (options->termination == TERM_PREC || term_iteration == 1)
+			{
+				double residuum = current[i][j] - star;
+				residuum = (residuum < 0) ? -residuum : residuum;
+
+				#pragma omp critical
+				{
+					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
+				}
+			}
+
+			next[i][j] = star;
+		}
+	}
+	return maxresiduum;
+}
+
+
+#define TAG_SEND_RECEIVE 1
+void communicate(double** current, unsigned N, unsigned num_lines)
 {
 	int rank, num_tasks;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -138,7 +185,7 @@ void communicate(double** current, double** next, unsigned N, unsigned num_lines
 	 */
 	if (rank != num_tasks - 1)
 	{
-		 MPI_Isend(next[num_lines - 2],        N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
+		 MPI_Isend(current[num_lines - 2],        N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
 		 MPI_Irecv(current[num_lines - 1], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[1]);
 	}
 
@@ -147,7 +194,7 @@ void communicate(double** current, double** next, unsigned N, unsigned num_lines
 	 */
 	if (rank != 0)
 	{
-		MPI_Isend(next[1],    N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[0]);
+		MPI_Isend(current[1],    N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[0]);
 		MPI_Irecv(current[0], N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[1]);
 	}
 
@@ -178,26 +225,34 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 		num_lines++;
 	}
 
-	/*
-	unsigned first_line = d.quot * rank;
-	if (rank >= d.rem)
-	{
-		first_line += d.rem;
-	}
-*/
-	unsigned first_line_loop = 0;
+	unsigned first_line = 0;
 	for (int i = 0; i < rank; i++)
 	{
-		first_line_loop += d.quot;
+		first_line += d.quot;
 		if (i < d.rem)
 		{
-			first_line_loop ++;
+			first_line ++;
 		}
+		first_line -= 2;
 	}
+
+	/**
+	 * Erzeuge überlappung (sieh bild)
+	 */
+	if (rank != 0)
+	{
+		first_line -= 2;
+	}
+
+	if (rank != num_tasks - 1)
+	{
+		num_lines += 2;
+	}
+
 
 	//assert(first_line_loop == first_line);
 
-	*the_first_line = first_line_loop;
+	*the_first_line = first_line;
 	*the_num_lines = num_lines;
 }
 
@@ -276,7 +331,10 @@ void display(double** chunk, unsigned interlines, unsigned first_line, unsigned 
 	}
 	else
 	{
-		for (unsigned i = 0; i < num_lines; ++i)
+		/*
+		 * 1 to num_lines - 1 to avoid borders
+		 */
+		for (unsigned i = 1; i < (num_lines - 1); ++i)
 		{
 			unsigned world_line_num = first_line + i;
 			//LOG("%d: world_line_num %u\n", rank, world_line_num);
@@ -362,8 +420,10 @@ int main(int argc, char** argv)
 
 	unsigned first_line, num_lines;
 	calculate_lines(N, &first_line, &num_lines);
-
 	LOG("%d: N: %u, num_tasks: %i, first_line: %u, num lines is %u\n", rank, N, num_tasks, first_line, num_lines);
+	//MPI_Finalize();
+	//return 0;
+
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/**
@@ -376,12 +436,13 @@ int main(int argc, char** argv)
 	double reduced_max_residuum;
 	LOG("%d: main algorithm\n", rank);
 	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion);
+
 	unsigned curr = 0, next;
 	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
 		next = (curr + 1) % NUM_CHUNKS;
-		communicate(chunk[curr], chunk[next], N, num_lines);	//Zeilenaustausch
-		double max_residuum = compute(chunk[curr], chunk[next], N, num_lines, use_stoerfunktion, first_line);
+		communicate(chunk[curr], N, num_lines);	//Zeilenaustausch
+		double max_residuum = compute2(chunk[curr], chunk[next], N, first_line, num_lines, use_stoerfunktion);
 		curr = next;
 		if (stop_after_precision_reached)
 		{
