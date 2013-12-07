@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -5,6 +6,7 @@
 #include <limits.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include <assert.h>
 #include <mpi.h>
 #include "displaymatrix-mpi.h"
@@ -170,17 +172,23 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 		num_lines++;
 	}
 
+	unsigned first_line = d.quot * rank;
+	if (rank >= d.rem)
+	{
+		first_line += d.rem;
+	}
+
 	unsigned first_line_loop = 0;
 	for (int i = 0; i < rank; i++)
 	{
-		first_line_loop ++;
+		first_line_loop += d.quot;
 		if (i < d.rem)
 		{
 			first_line_loop ++;
 		}
 	}
 
-	//assert(first_line_loop == first_line);
+	assert(first_line_loop == first_line);
 
 	*the_first_line = first_line_loop;
 	*the_num_lines = num_lines;
@@ -302,8 +310,8 @@ int main(int argc, char** argv)
 	unsigned first_line, num_lines;
 	calculate_lines(N, &first_line, &num_lines);
 
-	LOG("%d: first_line: %u, num lines is %u\n", rank, first_line, num_lines);
-
+	LOG("%d: N: %u, num_tasks: %i, first_line: %u, num lines is %u\n", rank, N, num_tasks, first_line, num_lines);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/**
 	 * Dies ist ein Teil unserer Matrix.
@@ -348,18 +356,19 @@ int main(int argc, char** argv)
 	// ich glaub first_line und num_lines Parameter sind noch irgend wie falsch
 	MPI_Status status;
 	curr = (curr + 1) % NUM_CHUNKS;
+	unsigned  advance = interlines + 1;
 	if (rank == 0)
 	{
 		double* line = chunk[curr][1];
-		for (unsigned i = 1; i <= N; i += interlines)
+		for (unsigned i = 1; i <= N; i += advance)
 		{
-			if (i != 1)
+			if (i >= first_line + num_lines)
 			{
 				LOG("%d: receiving line %u\n", rank, i);
 				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
 			}
 
-			for (unsigned j = 1; j <= N; j += interlines)
+			for (unsigned j = 1; j <= N; j += advance)
 			{
 				printf("%lf ", line[j]);
 			}
@@ -372,7 +381,7 @@ int main(int argc, char** argv)
 		{
 			unsigned world_line_num = first_line + i;
 			LOG("%d: world_line_num %u\n", rank, world_line_num);
-			if ((world_line_num - 1) % 8U == 0)
+			if ((world_line_num - 1) % advance == 0)
 			{
 				LOG("%d: sending line %u\n", rank, world_line_num);
 				double* line = chunk[curr][i];
