@@ -185,7 +185,7 @@ void communicate(double** current, unsigned N, unsigned num_lines)
 	 */
 	if (rank != num_tasks - 1)
 	{
-		 MPI_Isend(current[num_lines - 2],        N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
+		 MPI_Isend(current[num_lines - 2], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
 		 MPI_Irecv(current[num_lines - 1], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[1]);
 	}
 
@@ -194,7 +194,7 @@ void communicate(double** current, unsigned N, unsigned num_lines)
 	 */
 	if (rank != 0)
 	{
-		MPI_Isend(current[1],    N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[0]);
+		MPI_Isend(current[1], N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[0]);
 		MPI_Irecv(current[0], N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[1]);
 	}
 
@@ -233,17 +233,11 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 		{
 			first_line ++;
 		}
-		first_line -= 2;
 	}
 
 	/**
 	 * Erzeuge überlappung (sieh bild)
 	 */
-	if (rank != 0)
-	{
-		first_line -= 2;
-	}
-
 	if (rank != num_tasks - 1)
 	{
 		num_lines += 2;
@@ -447,7 +441,6 @@ int main(int argc, char** argv)
 		curr = next;
 		if (stop_after_precision_reached)
 		{
-
 			MPI_Reduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
 			if (reduced_max_residuum < target_residuum)
