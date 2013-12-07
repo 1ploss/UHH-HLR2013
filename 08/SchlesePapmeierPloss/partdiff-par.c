@@ -109,7 +109,7 @@ double compute(double** current, double** next, unsigned N, unsigned num_lines, 
 }
 
 
-#define TAG_SEND_RECEIVE 1
+#define TAG_SEND_RECEIVE 0
 void communicate(double** current, double** next, unsigned N, unsigned num_lines)
 {
 	int rank, num_tasks;
@@ -184,6 +184,49 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 
 	*the_first_line = first_line_loop;
 	*the_num_lines = num_lines;
+}
+
+/* ************************************************************************ */
+/* allocateMemory ()                                                        */
+/* allocates memory and quits if there was a memory allocation problem      */
+/* ************************************************************************ */
+static
+void*
+allocateMemory (size_t size)
+{
+	void *p;
+
+	if ((p = malloc(size)) == NULL)
+	{
+		printf("Speicherprobleme! %lu\n", size);
+		/* exit program */
+		exit(1);
+	}
+
+	return p;
+}
+
+
+double*** allocateMatrices (unsigned N, double** freeme)
+{
+	double*** Matrix;
+	// todo free M later
+	double* M = allocateMemory(NUM_CHUNKS * (N + 1) * (N + 1) * sizeof(double));
+
+	Matrix = allocateMemory(NUM_CHUNKS * sizeof(double**));
+
+	for (uint64_t i = 0; i < NUM_CHUNKS; i++)
+	{
+		Matrix[i] = allocateMemory((N + 1) * sizeof(double*));
+
+		for (uint64_t j = 0; j <= N; j++)
+		{
+			Matrix[i][j] = M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
+		}
+	}
+
+	*freeme = M;
+	return Matrix;
 }
 
 /**
@@ -266,26 +309,13 @@ int main(int argc, char** argv)
 	 * Dies ist ein Teil unserer Matrix.
 	 * Die erste und die letzten Zeilen sind ränder und werden vom compute() nicht angefasst.
 	 */
-	double* chunk[NUM_CHUNKS][num_lines];
+	double* M;
+	double*** chunk = allocateMatrices(N, &M);
+
 
 	//Für die Nachrichtenverschickung müssen alle Matrizen die gleiche Größe haben
 	//TODO sich drum kümmern, dass bei kleinerer lokalen Matrix alles glatt läuft!
-	unsigned pool_size = N * num_lines;
-	for (unsigned i = 0; i < NUM_CHUNKS; i++)
-	{
-		LOG("%d: allocating chunk %u memory of %u doubles\n", rank, i, pool_size);
-		double* pool = calloc(sizeof(double), pool_size);
-		if (pool == 0)
-		{
-			printf("matrix chunk memory allocation failed\n");
-			MPI_Abort(MPI_COMM_WORLD, 6);
-		}
-		// fixing line pointers
-		for (unsigned j = 0; j < num_lines; j++)
-		{
-			chunk[i][j] = &pool[j * N];
-		}
-	}
+
 
 	LOG("%d: main algorithm\n", rank);
 	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion, rank, num_tasks);
@@ -308,13 +338,52 @@ int main(int argc, char** argv)
 		}
 	}
 
-	DisplayMatrix ("bla", chunk, (int)interlines , rank , num_lines, first_line, first_line + num_lines);
+	MPI_Barrier(MPI_COMM_WORLD);
+	fflush(stdout);
+	fflush(stderr);
+	usleep(100);
+	//DisplayMatrix ("bla", chunk[(curr + 1) % NUM_CHUNKS], (int)interlines , rank , num_lines, first_line, first_line + num_lines);
+
+	// Ein entwurf der DisplayMatrix
+	// ich glaub first_line und num_lines Parameter sind noch irgend wie falsch
+	MPI_Status status;
+	curr = (curr + 1) % NUM_CHUNKS;
+	if (rank == 0)
+	{
+		double* line = chunk[curr][1];
+		for (unsigned i = 1; i <= N; i += interlines)
+		{
+			if (i != 1)
+			{
+				LOG("%d: receiving line %u\n", rank, i);
+				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
+			}
+
+			for (unsigned j = 1; j <= N; j += interlines)
+			{
+				printf("%lf ", line[j]);
+			}
+			printf("\n");
+		}
+	}
+	else
+	{
+		for (unsigned i = 0; i < num_lines; ++i)
+		{
+			unsigned world_line_num = first_line + i;
+			LOG("%d: world_line_num %u\n", rank, world_line_num);
+			if ((world_line_num - 1) % 8U == 0)
+			{
+				LOG("%d: sending line %u\n", rank, world_line_num);
+				double* line = chunk[curr][i];
+				MPI_Send(line, N + 2, MPI_DOUBLE, 0, world_line_num, MPI_COMM_WORLD);
+			}
+		}
+	}
 
 	LOG("%d: cleanup\n", rank);
-	for (unsigned i = 0; i < NUM_CHUNKS; i++)
-	{
-		free(chunk[i][0]);
-	}
+	free(M);
+	free(chunk);
 	MPI_Finalize();
 }
 
