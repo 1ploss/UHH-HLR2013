@@ -1,17 +1,22 @@
 CC=mpicc
-CFLAGS=-std=c99 -Wall -Wextra -ggdb -lm
-
-OBJS = partdiff-par.o displaymatrix-mpi.o
+CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -lm
 
 # Rule to create *.o from *.c
-%.o : %.c
+
+partdiff-par.o: partdiff-par.c Makefile
 	$(CC) $(CFLAGS) -c $< -o $@
 
-partdiff-par: $(OBJS) Makefile
-	$(CC) $(CFLAGS) -ggdb $(OBJS) -o $@
+partdiff-par: partdiff-par.o
+	$(CC) $(CFLAGS) -ggdb $< -o $@
 
-all: partdiff-par
+partdiff-omp.o: partdiff-omp.c Makefile
+	$(CC) $(CFLAGS) -fopenmp -c $< -o $@
+	
+partdiff-omp: partdiff-omp.o
+	$(CC) $(CFLAGS)  -fopenmp -ggdb $< -o $@
+
+all: partdiff-par partdiff-omp
 
 clean:
-	rm *.o ; rm -f partdiff-par
+	rm *.o ; rm -f partdiff-par partdiff-omp
 	
