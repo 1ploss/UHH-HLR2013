@@ -155,6 +155,35 @@ void communicate(double** current, double** next, unsigned N, unsigned num_lines
 }
 
 #include "displaymatrix-mpi.h"
+
+void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lines)
+{
+	int rank, num_tasks;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+
+	div_t d = div(N, num_tasks);
+	unsigned num_lines = d.quot;
+	if (rank < d.rem)
+	{
+		num_lines++;
+	}
+
+	unsigned first_line;
+	if (d.rem)
+	{
+		div_t e = div(rank, d.rem);
+		first_line = e.quot * d.quot + e.rem - 1;
+	}
+	else
+	{
+		first_line = num_lines * rank;
+	}
+
+	*the_first_line = first_line;
+	*the_num_lines = num_lines;
+}
+
 /**
  * Benutzung:
  * arg[0] interlines use_stoerfunktion target_iter target_residuum
@@ -219,27 +248,27 @@ int main(int argc, char** argv)
 	/**
 	 * Main Programm, obligatory mpi queries, calculating chunk sizes
 	 */
+
+
 	int rank, num_tasks;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
 
-	div_t d = div(N, num_tasks);
-	const unsigned num_lines_in_chunk = d.quot + (d.rem != 0);
-	const unsigned num_lines_in_this_chunk = num_lines_in_chunk - (rank > d.rem);
-	const unsigned first_line = rank * num_lines_in_this_chunk;
-	const unsigned last_line = (rank + 1) * num_lines_in_this_chunk;
-	LOG("%d: num_lines_in_chunk: %u\n", rank, num_lines_in_chunk);
-	LOG("%d: num_lines_in_this_chunk: %u\n", rank, num_lines_in_this_chunk);
+	unsigned first_line, num_lines;
+	calculate_lines(N, &first_line, &num_lines);
+
+	LOG("%d: first_line: %u, num lines is %u\n", rank, first_line, num_lines);
+
 
 	/**
 	 * Dies ist ein Teil unserer Matrix.
 	 * Die erste und die letzten Zeilen sind ränder und werden vom compute() nicht angefasst.
 	 */
-	double* chunk[NUM_CHUNKS][num_lines_in_chunk];
+	double* chunk[NUM_CHUNKS][num_lines];
 
 	//Für die Nachrichtenverschickung müssen alle Matrizen die gleiche Größe haben
 	//TODO sich drum kümmern, dass bei kleinerer lokalen Matrix alles glatt läuft!
-	unsigned pool_size = N * num_lines_in_chunk;
+	unsigned pool_size = N * num_lines;
 	for (unsigned i = 0; i < NUM_CHUNKS; i++)
 	{
 		LOG("%d: allocating chunk %u memory of %u doubles\n", rank, i, pool_size);
@@ -250,20 +279,20 @@ int main(int argc, char** argv)
 			MPI_Abort(MPI_COMM_WORLD, 6);
 		}
 		// fixing line pointers
-		for (unsigned j = 0; j < num_lines_in_chunk; j++)
+		for (unsigned j = 0; j < num_lines; j++)
 		{
 			chunk[i][j] = &pool[j * N];
 		}
 	}
 
 	LOG("%d: main algorithm\n", rank);
-	init(chunk[0], first_line, last_line, N, use_stoerfunktion, rank, num_tasks);
+	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion, rank, num_tasks);
 	unsigned curr = 0, next;
 	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
 		next = (curr + 1) % NUM_CHUNKS;
-		communicate(chunk[curr], chunk[next], N, last_line - first_line);	//Zeilenaustausch
-		double max_residuum = compute(chunk[curr], chunk[next], first_line, last_line, use_stoerfunktion, N);
+		communicate(chunk[curr], chunk[next], N, num_lines);	//Zeilenaustausch
+		double max_residuum = compute(chunk[curr], chunk[next], N, num_lines, use_stoerfunktion, first_line);
 		curr = next;
 		if (stop_after_precision_reached)
 		{
