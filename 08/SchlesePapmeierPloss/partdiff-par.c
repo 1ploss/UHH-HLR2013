@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
 #include <mpi.h>
 #include "displaymatrix-mpi.h"
 #define DEBUG
@@ -169,18 +170,19 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 		num_lines++;
 	}
 
-	unsigned first_line;
-	if (d.rem)
+	unsigned first_line_loop = 0;
+	for (int i = 0; i < rank; i++)
 	{
-		div_t e = div(rank, d.rem);
-		first_line = e.quot * d.quot + e.rem - 1;
-	}
-	else
-	{
-		first_line = num_lines * rank;
+		first_line_loop ++;
+		if (i < d.rem)
+		{
+			first_line_loop ++;
+		}
 	}
 
-	*the_first_line = first_line;
+	//assert(first_line_loop == first_line);
+
+	*the_first_line = first_line_loop;
 	*the_num_lines = num_lines;
 }
 
