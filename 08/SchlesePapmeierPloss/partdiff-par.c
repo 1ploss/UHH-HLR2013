@@ -28,33 +28,39 @@
  * Initializes the matrix.
  * Was ist die pNr und pAnzahl?
  */
-void init(double** chunk, unsigned N, unsigned first_line, unsigned last_line, unsigned use_stoerfunktion,
-				int pNr, int pAnzahl)
+void init(double** chunk, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
 {
-	unsigned lines = last_line - first_line;
+	int rank, num_tasks;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+
 	double h = 1.0 / (double) N;
 	/* Matrix is already initialized with zeros */
 
-	/* initialize borders, depending on function (function 2: nothing to do) */
 	if (!use_stoerfunktion)
 	{
-		for (unsigned i = 0; i < lines; i++)
+		for (unsigned i = first_line; i <= first_line + num_lines; i++)
 		{
-			unsigned globali = (i + (pNr * lines));
-			chunk[i][0] = 1.0 - (h * globali);
-			chunk[i][N] = h * globali;
-			if (pNr == 0)
-			{
-				chunk[0][i] = 1.0 - (h * globali);
-			}
-			if (pNr == pAnzahl - 1)
-			{
-				chunk[lines - 1][i] = h * globali;
-			}
+			chunk[i][0] = 1.0 - (h * i);
+			chunk[i][N] = h * i;
 		}
-		chunk[N][0] = 0.0;
-		chunk[0][N] = 0.0;
-		//TODO Es könnte sein, dass die Initialisierung anders ist als die sequentielle, da N irgendwie komisch verwaltet wird
+
+		if (rank == 0)
+		{
+			for (unsigned i = 0; i <= N; i++)
+			{
+				chunk[0][i] = 1.0 - (h * i);
+			}
+			chunk[0][N] = 0.0;
+		}
+		else if (rank == num_tasks - 1)
+		{
+			for (unsigned i = 0; i <= N; i++)
+			{
+				chunk[N][i] = h * i;
+			}
+			chunk[N][0] = 0.0;
+		}
 	}
 }
 
@@ -257,13 +263,13 @@ void display(double** chunk, unsigned interlines, unsigned first_line, unsigned 
 		{
 			if (i >= first_line + num_lines)
 			{
-				LOG("%d: receiving line %u\n", rank, i);
+				//LOG("%d: receiving line %u\n", rank, i);
 				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
 			}
 
 			for (unsigned j = 1; j <= N; j += advance)
 			{
-				printf("%lf ", line[j]);
+				printf("%4.4f ", line[j]);
 			}
 			printf("\n");
 		}
@@ -273,10 +279,10 @@ void display(double** chunk, unsigned interlines, unsigned first_line, unsigned 
 		for (unsigned i = 0; i < num_lines; ++i)
 		{
 			unsigned world_line_num = first_line + i;
-			LOG("%d: world_line_num %u\n", rank, world_line_num);
+			//LOG("%d: world_line_num %u\n", rank, world_line_num);
 			if ((world_line_num - 1) % advance == 0)
 			{
-				LOG("%d: sending line %u\n", rank, world_line_num);
+				//LOG("%d: sending line %u\n", rank, world_line_num);
 				double* line = chunk[i];
 				MPI_Send(line, N + 2, MPI_DOUBLE, 0, world_line_num, MPI_COMM_WORLD);
 			}
@@ -362,18 +368,14 @@ int main(int argc, char** argv)
 
 	/**
 	 * Dies ist ein Teil unserer Matrix.
-	 * Die erste und die letzten Zeilen sind ränder und werden vom compute() nicht angefasst.
+	 * Die erste und die letzten Zeilen sind ränder und werden vom compute() nicht angefasst,
+	 * nur unter benachbarten Prozessen ausgetauscht.
 	 */
 	double* M;
 	double*** chunk = allocateMatrices(N, &M);
-
-
-	//Für die Nachrichtenverschickung müssen alle Matrizen die gleiche Größe haben
-	//TODO sich drum kümmern, dass bei kleinerer lokalen Matrix alles glatt läuft!
-
-
+	double reduced_max_residuum;
 	LOG("%d: main algorithm\n", rank);
-	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion, rank, num_tasks);
+	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion);
 	unsigned curr = 0, next;
 	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
@@ -383,7 +385,7 @@ int main(int argc, char** argv)
 		curr = next;
 		if (stop_after_precision_reached)
 		{
-			double reduced_max_residuum;
+
 			MPI_Reduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
 			if (reduced_max_residuum < target_residuum)
@@ -398,17 +400,21 @@ int main(int argc, char** argv)
 	MPI_Barrier(MPI_COMM_WORLD);
 	fflush(stdout);
 	fflush(stderr);
-	usleep(100);
+	usleep(140);
+
 	display(chunk[curr], interlines, first_line, num_lines);
-
+	if (rank == 0)
+	{
+		printf("max residuum is %lf\n", reduced_max_residuum);
+	}
 	//DisplayMatrix ("bla", chunk[(curr + 1) % NUM_CHUNKS], (int)interlines , rank , num_lines, first_line, first_line + num_lines);
-
-	// Ein entwurf der DisplayMatrix
-	// ich glaub first_line und num_lines Parameter sind noch irgend wie falsch
-
 
 	LOG("%d: cleanup\n", rank);
 	free(M);
+	for (unsigned i = 0; i < NUM_CHUNKS; ++i)
+	{
+		free(chunk[i]);
+	}
 	free(chunk);
 	MPI_Finalize();
 }
