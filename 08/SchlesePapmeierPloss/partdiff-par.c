@@ -165,19 +165,20 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
 
-	div_t d = div(N, num_tasks);
+	div_t d = div((N + 1), num_tasks);
 	unsigned num_lines = d.quot;
 	if (rank < d.rem)
 	{
 		num_lines++;
 	}
 
+	/*
 	unsigned first_line = d.quot * rank;
 	if (rank >= d.rem)
 	{
 		first_line += d.rem;
 	}
-
+*/
 	unsigned first_line_loop = 0;
 	for (int i = 0; i < rank; i++)
 	{
@@ -188,7 +189,7 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 		}
 	}
 
-	assert(first_line_loop == first_line);
+	//assert(first_line_loop == first_line);
 
 	*the_first_line = first_line_loop;
 	*the_num_lines = num_lines;
@@ -198,9 +199,7 @@ void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lin
 /* allocateMemory ()                                                        */
 /* allocates memory and quits if there was a memory allocation problem      */
 /* ************************************************************************ */
-static
-void*
-allocateMemory (size_t size)
+static void* allocateMemory (size_t size)
 {
 	void *p;
 
@@ -218,8 +217,12 @@ allocateMemory (size_t size)
 double*** allocateMatrices (unsigned N, double** freeme)
 {
 	double*** Matrix;
-	// todo free M later
-	double* M = allocateMemory(NUM_CHUNKS * (N + 1) * (N + 1) * sizeof(double));
+	double* M = calloc(sizeof(double), NUM_CHUNKS * (N + 1) * (N + 1));
+	if (!M)
+	{
+		perror("calloc failed\n");
+		exit(EXIT_FAILURE);
+	}
 
 	Matrix = allocateMemory(NUM_CHUNKS * sizeof(double**));
 
@@ -235,6 +238,50 @@ double*** allocateMatrices (unsigned N, double** freeme)
 
 	*freeme = M;
 	return Matrix;
+}
+
+void display(double** chunk, unsigned interlines, unsigned first_line, unsigned num_lines)
+{
+	MPI_Status status;
+	int rank, num_tasks;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+
+	unsigned N = (interlines * 8) + 9;
+	unsigned  advance = interlines + 1;
+
+	if (rank == 0)
+	{
+		double* line = chunk[1];
+		for (unsigned i = 1; i <= N; i += advance)
+		{
+			if (i >= first_line + num_lines)
+			{
+				LOG("%d: receiving line %u\n", rank, i);
+				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
+			}
+
+			for (unsigned j = 1; j <= N; j += advance)
+			{
+				printf("%lf ", line[j]);
+			}
+			printf("\n");
+		}
+	}
+	else
+	{
+		for (unsigned i = 0; i < num_lines; ++i)
+		{
+			unsigned world_line_num = first_line + i;
+			LOG("%d: world_line_num %u\n", rank, world_line_num);
+			if ((world_line_num - 1) % advance == 0)
+			{
+				LOG("%d: sending line %u\n", rank, world_line_num);
+				double* line = chunk[i];
+				MPI_Send(line, N + 2, MPI_DOUBLE, 0, world_line_num, MPI_COMM_WORLD);
+			}
+		}
+	}
 }
 
 /**
@@ -346,49 +393,19 @@ int main(int argc, char** argv)
 		}
 	}
 
+	curr = (curr + 1) % NUM_CHUNKS;
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	fflush(stdout);
 	fflush(stderr);
 	usleep(100);
+	display(chunk[curr], interlines, first_line, num_lines);
+
 	//DisplayMatrix ("bla", chunk[(curr + 1) % NUM_CHUNKS], (int)interlines , rank , num_lines, first_line, first_line + num_lines);
 
 	// Ein entwurf der DisplayMatrix
 	// ich glaub first_line und num_lines Parameter sind noch irgend wie falsch
-	MPI_Status status;
-	curr = (curr + 1) % NUM_CHUNKS;
-	unsigned  advance = interlines + 1;
-	if (rank == 0)
-	{
-		double* line = chunk[curr][1];
-		for (unsigned i = 1; i <= N; i += advance)
-		{
-			if (i >= first_line + num_lines)
-			{
-				LOG("%d: receiving line %u\n", rank, i);
-				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
-			}
 
-			for (unsigned j = 1; j <= N; j += advance)
-			{
-				printf("%lf ", line[j]);
-			}
-			printf("\n");
-		}
-	}
-	else
-	{
-		for (unsigned i = 0; i < num_lines; ++i)
-		{
-			unsigned world_line_num = first_line + i;
-			LOG("%d: world_line_num %u\n", rank, world_line_num);
-			if ((world_line_num - 1) % advance == 0)
-			{
-				LOG("%d: sending line %u\n", rank, world_line_num);
-				double* line = chunk[curr][i];
-				MPI_Send(line, N + 2, MPI_DOUBLE, 0, world_line_num, MPI_COMM_WORLD);
-			}
-		}
-	}
 
 	LOG("%d: cleanup\n", rank);
 	free(M);
