@@ -435,12 +435,9 @@ int main(int argc, char** argv)
 	double*** chunk = allocateMatrices(N, &M);
 	double reduced_max_residuum;
 	LOG("%d: main algorithm\n", rank);
-<<<<<<< HEAD
+
 	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion);
 
-=======
-	init(chunk[0], first_line, first_line + num_lines-1, N, use_stoerfunktion, rank, num_tasks);
->>>>>>> 2b9f11b675c3e5ce153a8667e8e364a740e435b0
 	unsigned curr = 0, next;
 	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
