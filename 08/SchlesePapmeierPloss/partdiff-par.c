@@ -56,39 +56,44 @@ void init(double** chunk, unsigned N, unsigned first_line, unsigned last_line, u
 }
 
 /**
- * computes from current into next. TODO Hinsichtlich der Annahmen anpassen
+ * computes from current into next.
  * @param current ich gehe davon aus, dass die erste Dimension den Zeilen entspricht und die zweite den Spalten
  * @return max residium
  */
-double compute(double** current, double** next, unsigned N, unsigned first_line, unsigned last_line,
-				unsigned stoerfunktion)
+double compute(double** current, double** next, unsigned N, unsigned num_lines, unsigned use_stoerfunktion, unsigned first_gobal_line)
 {
+	int rank, num_tasks;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+	LOG("%i: compute %u lines\n", rank, num_lines);
+
+
 	double pih = 0.0;
 	double fpisin = 0.0;
 	double star = 0.0;
 
-	if (stoerfunktion)
+	if (use_stoerfunktion)
 	{
 		pih = PI * (1.0 / (double) N);
 		fpisin = 2.0 * TWO_PI_SQUARE;
 	}
 	double maxresiduum = 0.0;
-	//Hier gehe ich davon aus, dass first_line nie 0 und last_line nie N ist
-	for (unsigned i = 1; i < (last_line - first_line - 1); i++)
+
+	for (unsigned i = 1; i < num_lines - 1; i++)
 	{
 		double fpisin_i = 0.0;
-		double iGlobal = i + first_line;
+		double global_line_nr = first_gobal_line + i;
 
-		if (stoerfunktion)
+		if (use_stoerfunktion)
 		{
-			fpisin_i = fpisin * sin(pih * iGlobal);
+			fpisin_i = fpisin * sin(pih * (double)global_line_nr);
 		}
 		//Hier gehe ich davon aus, dass die laenge der tatsächlichen Matrix entspricht
 		for (unsigned j = 1; j < (N - 1); j++)
 		{
 			//Hier gehe ich davon aus, dass die Randwerte von den Nachbarprozessoren im current enthalten sind
 			star = 0.25 * (current[i - 1][j] + current[i][j - 1] + current[i][j + 1] + current[i + 1][j]);
-			if (stoerfunktion)
+			if (use_stoerfunktion)
 			{
 				star += fpisin_i * sin(pih * (double) j);
 			}
@@ -118,15 +123,14 @@ void communicate(double** current, double** next, unsigned N, unsigned num_lines
 
 	MPI_Request oben_request[2], unten_request[2];
 	MPI_Status status;
-	unsigned locallastline = num_lines - 1;
 
 	/**
 	 * Kommuniziere mit unten (alle ausser dem letzten Rank)
 	 */
 	if (rank != num_tasks - 1)
 	{
-		 MPI_Isend(next[locallastline],        N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
-		 MPI_Irecv(current[locallastline + 1], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[1]);
+		 MPI_Isend(next[num_lines - 2],        N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
+		 MPI_Irecv(current[num_lines - 1], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[1]);
 	}
 
 	/**
@@ -151,7 +155,11 @@ void communicate(double** current, double** next, unsigned N, unsigned num_lines
 }
 
 #include "displaymatrix-mpi.h"
-
+/**
+ * Benutzung:
+ * arg[0] interlines use_stoerfunktion target_iter target_residuum
+ * target_residuum ist optinal, wenn target_iter == 0
+ */
 int main(int argc, char** argv)
 {
 	int rc = MPI_Init(&argc, &argv);
@@ -224,7 +232,8 @@ int main(int argc, char** argv)
 	LOG("%d: num_lines_in_this_chunk: %u\n", rank, num_lines_in_this_chunk);
 
 	/**
-	 * Dies ist ein Teil unserer Matrix
+	 * Dies ist ein Teil unserer Matrix.
+	 * Die erste und die letzten Zeilen sind ränder und werden vom compute() nicht angefasst.
 	 */
 	double* chunk[NUM_CHUNKS][num_lines_in_chunk];
 
