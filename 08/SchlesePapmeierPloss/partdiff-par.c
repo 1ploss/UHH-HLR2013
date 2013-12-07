@@ -9,7 +9,6 @@
 #include <unistd.h>
 #include <assert.h>
 #include <mpi.h>
-#include "displaymatrix-mpi.h"
 #define DEBUG
 #ifdef DEBUG
 #define LOG(...) fprintf(stderr, __VA_ARGS__);
@@ -121,9 +120,9 @@ double compute(double** current, double** next, unsigned N, unsigned first_line,
 double compute2(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
 {
 	double maxresiduum = 0;
-	double h = 1.0 / (double)N;
-	double pih = PI * h;
-	double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
+	const double h = 1.0 / (double)N;
+	const double pih = PI * h;
+	const double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
 
 	/* over all rows */
 	#pragma omp parallel for
@@ -164,7 +163,8 @@ double compute2(double** current, double** next, unsigned N, unsigned first_line
 }
 
 
-#define TAG_SEND_RECEIVE 1
+#define TAG_SEND_UP 1
+#define TAG_SEND_DOWN 2
 void communicate(double** current, unsigned N, unsigned num_lines)
 {
 	int rank, num_tasks;
@@ -185,8 +185,8 @@ void communicate(double** current, unsigned N, unsigned num_lines)
 	 */
 	if (rank != num_tasks - 1)
 	{
-		 MPI_Isend(current[num_lines - 2], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[0]);
-		 MPI_Irecv(current[num_lines - 1], N, MPI_DOUBLE, next_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &unten_request[1]);
+		 MPI_Isend(current[num_lines - 2], N, MPI_DOUBLE, next_rank, TAG_SEND_DOWN, MPI_COMM_WORLD, &unten_request[0]);
+		 MPI_Irecv(current[num_lines - 1], N, MPI_DOUBLE, next_rank, TAG_SEND_UP, MPI_COMM_WORLD, &unten_request[1]);
 	}
 
 	/**
@@ -194,8 +194,8 @@ void communicate(double** current, unsigned N, unsigned num_lines)
 	 */
 	if (rank != 0)
 	{
-		MPI_Isend(current[1], N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[0]);
-		MPI_Irecv(current[0], N, MPI_DOUBLE, prev_rank, TAG_SEND_RECEIVE, MPI_COMM_WORLD, &oben_request[1]);
+		MPI_Isend(current[1], N, MPI_DOUBLE, prev_rank, TAG_SEND_UP, MPI_COMM_WORLD, &oben_request[0]);
+		MPI_Irecv(current[0], N, MPI_DOUBLE, prev_rank, TAG_SEND_DOWN, MPI_COMM_WORLD, &oben_request[1]);
 	}
 
 	if (rank != num_tasks - 1)
@@ -209,8 +209,6 @@ void communicate(double** current, unsigned N, unsigned num_lines)
 		MPI_Wait(&oben_request[1], &status);
 	}
 }
-
-#include "displaymatrix-mpi.h"
 
 void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lines)
 {
@@ -312,7 +310,7 @@ void display(double** chunk, unsigned interlines, unsigned first_line, unsigned 
 		{
 			if (i >= first_line + num_lines)
 			{
-				//LOG("%d: receiving line %u\n", rank, i);
+				LOG("%d: receiving line %u\n", rank, i);
 				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
 			}
 
@@ -325,16 +323,13 @@ void display(double** chunk, unsigned interlines, unsigned first_line, unsigned 
 	}
 	else
 	{
-		/*
-		 * 1 to num_lines - 1 to avoid borders
-		 */
-		for (unsigned i = 1; i < (num_lines - 1); ++i)
+		for (unsigned i = 1; i <= (num_lines - 1); ++i)
 		{
 			unsigned world_line_num = first_line + i;
-			//LOG("%d: world_line_num %u\n", rank, world_line_num);
+			LOG("%d: world_line_num %u\n", rank, world_line_num);
 			if ((world_line_num - 1) % advance == 0)
 			{
-				//LOG("%d: sending line %u\n", rank, world_line_num);
+				LOG("%d: sending line %u\n", rank, world_line_num);
 				double* line = chunk[i];
 				MPI_Send(line, N + 2, MPI_DOUBLE, 0, world_line_num, MPI_COMM_WORLD);
 			}
@@ -428,6 +423,7 @@ int main(int argc, char** argv)
 	double* M;
 	double*** chunk = allocateMatrices(N, &M);
 	double reduced_max_residuum;
+	double max_residuum;
 	LOG("%d: main algorithm\n", rank);
 
 	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion);
@@ -437,7 +433,7 @@ int main(int argc, char** argv)
 	{
 		next = (curr + 1) % NUM_CHUNKS;
 		communicate(chunk[curr], N, num_lines);	//Zeilenaustausch
-		double max_residuum = compute2(chunk[curr], chunk[next], N, first_line, num_lines, use_stoerfunktion);
+		max_residuum = compute2(chunk[curr], chunk[next], N, first_line, num_lines, use_stoerfunktion);
 		curr = next;
 		if (stop_after_precision_reached)
 		{
@@ -452,6 +448,12 @@ int main(int argc, char** argv)
 
 	curr = (curr + 1) % NUM_CHUNKS;
 
+	if (!stop_after_precision_reached)
+	{
+		reduced_max_residuum = max_residuum;
+	}
+
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	fflush(stdout);
 	fflush(stderr);
@@ -462,7 +464,6 @@ int main(int argc, char** argv)
 	{
 		printf("max residuum is %lf\n", reduced_max_residuum);
 	}
-	//DisplayMatrix ("bla", chunk[(curr + 1) % NUM_CHUNKS], (int)interlines , rank , num_lines, first_line, first_line + num_lines);
 
 	LOG("%d: cleanup\n", rank);
 	free(M);
