@@ -8,7 +8,7 @@ OBJS = partdiff-par.o displaymatrix-mpi.o
 	$(CC) $(CFLAGS) -c $< -o $@
 
 partdiff-par: $(OBJS) Makefile
-	$(CC) $(CFLAGS) -ggdb $< -o $@
+	$(CC) $(CFLAGS) -ggdb $(OBJS) -o $@
 
 all: partdiff-par
 

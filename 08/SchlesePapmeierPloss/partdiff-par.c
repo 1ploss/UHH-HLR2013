@@ -308,11 +308,8 @@ int main(int argc, char** argv)
 		}
 	}
 
-	/*
-	 char s = "Hallo";
-	 DisplayMatrix ( *s,chunk,(int)interlines , rank , last_line - first_line, first_line, last_line );
-	 //TODO ob ich den Aufruf von DisplayMatrix richtig gemacht hab, weiß ich nicht
-	 */
+	DisplayMatrix ("bla", chunk, (int)interlines , rank , num_lines, first_line, first_line + num_lines);
+
 	LOG("%d: cleanup\n", rank);
 	for (unsigned i = 0; i < NUM_CHUNKS; i++)
 	{
