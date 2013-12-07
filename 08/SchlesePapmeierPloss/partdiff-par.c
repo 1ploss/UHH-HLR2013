@@ -82,14 +82,14 @@ double compute(double** current, double** next, unsigned N, unsigned num_lines, 
 	}
 	double maxresiduum = 0.0;
 
-	for (unsigned i = 1; i < num_lines - 1; i++)
+	for (unsigned i = 1; i < num_lines + 1; i++)
 	{
 		double fpisin_i = 0.0;
 		double global_line_nr = first_gobal_line + i;
 
 		if (use_stoerfunktion)
 		{
-			fpisin_i = fpisin * sin(pih * (double)global_line_nr);
+			fpisin_i = fpisin * sin(pih * global_line_nr);
 		}
 		//Hier gehe ich davon aus, dass die laenge der tatsächlichen Matrix entspricht
 		for (unsigned j = 1; j < (N - 1); j++)
@@ -373,7 +373,7 @@ int main(int argc, char** argv)
 
 
 	LOG("%d: main algorithm\n", rank);
-	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion, rank, num_tasks);
+	init(chunk[0], first_line, first_line + num_lines-1, N, use_stoerfunktion, rank, num_tasks);
 	unsigned curr = 0, next;
 	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
