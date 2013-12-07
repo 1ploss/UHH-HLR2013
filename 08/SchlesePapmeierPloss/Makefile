@@ -1,8 +1,6 @@
 CC=mpicc
 CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -lm
 
-# Rule to create *.o from *.c
-
 partdiff-par.o: partdiff-par.c Makefile
 	$(CC) $(CFLAGS) -c $< -o $@
 

@@ -63,72 +63,26 @@ void init(double** chunk, unsigned N, unsigned first_line, unsigned num_lines, u
 	}
 }
 
-/**
- * computes from current into next.
- * @param current ich gehe davon aus, dass die erste Dimension den Zeilen entspricht und die zweite den Spalten
- * @return max residium
- */
-double compute(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
-{
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
-	LOG("%i: compute %u lines\n", rank, num_lines);
-
-
-	double pih = 0.0;
-	double fpisin = 0.0;
-	double star = 0.0;
-
-	if (use_stoerfunktion)
-	{
-		pih = PI * (1.0 / (double) N);
-		fpisin = 2.0 * TWO_PI_SQUARE;
-	}
-	double maxresiduum = 0.0;
-
-	for (unsigned i = 1; i < num_lines + 1; i++)
-	{
-		double fpisin_i = 0.0;
-		unsigned global_line_nr = first_line + i;
-
-		if (use_stoerfunktion)
-		{
-			fpisin_i = fpisin * sin(pih * global_line_nr);
-		}
-		//Hier gehe ich davon aus, dass die laenge der tatsächlichen Matrix entspricht
-		for (unsigned j = 1; j < (N - 1); j++)
-		{
-			//Hier gehe ich davon aus, dass die Randwerte von den Nachbarprozessoren im current enthalten sind
-			star = 0.25 * (current[i - 1][j] + current[i][j - 1] + current[i][j + 1] + current[i + 1][j]);
-			if (use_stoerfunktion)
-			{
-				star += fpisin_i * sin(pih * (double) j);
-			}
-
-			double residuum = current[i][j] - star;
-			residuum = (residuum < 0) ? -residuum : residuum;
-			maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
-			next[i][j] = star;
-		}
-	}
-	return maxresiduum;
-}
-
 #include <omp.h>
 
-double compute2(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
+double compute(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
 {
 	double maxresiduum = 0;
 	const double h = 1.0 / (double)N;
 	const double pih = PI * h;
 	const double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
 
+	int rank, num_tasks;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+	LOG("%i: compiting %u lines\n", rank, num_lines - 2);
+
 	/* over all rows */
 	#pragma omp parallel for
 	for (unsigned i = first_line + 1; i < (first_line + num_lines - 1); i++)
 	{
 		double fpisin_i = 0.0;
+		LOG("%i: line %u\n", rank, i);
 
 		if (use_stoerfunktion)
 		{
@@ -433,7 +387,7 @@ int main(int argc, char** argv)
 	{
 		next = (curr + 1) % NUM_CHUNKS;
 		communicate(chunk[curr], N, num_lines);	//Zeilenaustausch
-		max_residuum = compute2(chunk[curr], chunk[next], N, first_line, num_lines, use_stoerfunktion);
+		max_residuum = compute(chunk[curr], chunk[next], N, first_line, num_lines, use_stoerfunktion);
 		curr = next;
 		if (stop_after_precision_reached)
 		{
