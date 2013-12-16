@@ -1,4 +1,4 @@
-#define _XOPEN_SOURCE
+#define _BSD_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -9,13 +9,15 @@
 #include <unistd.h>
 #include <assert.h>
 #include <mpi.h>
-#define DEBUG
+#ifdef _OPENMP
+# include <omp.h>
+#endif
+//#define DEBUG
 #ifdef DEBUG
 #define LOG(...) fprintf(stderr, __VA_ARGS__);
 #else
 #define LOG(...)
 #endif
-#define NUM_CHUNKS 2
 
 #ifndef PI
 #define PI           3.14159265358979323846
@@ -23,85 +25,114 @@
 #define TWO_PI_SQUARE (2.0 * PI * PI)
 
 
-/**
- * Initializes the matrix.
- * Was ist die pNr und pAnzahl?
- */
-void init(double** chunk, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
+typedef struct
 {
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+	unsigned use_stoerfunktion;
+	unsigned target_iteration;
+	double target_residuum;
+	int rank;
+	int num_tasks;
+	unsigned interlines;
+	unsigned row_len;
+	unsigned first_row;
+	unsigned num_rows;
 
-	double h = 1.0 / (double) N;
-	/* Matrix is already initialized with zeros */
+	unsigned omp_num_threads;
 
-	if (!use_stoerfunktion)
+	unsigned num_chunks;
+	double* mem_pool;
+	double*** chunk;
+} Params;
+
+/**
+ * Initializes part of a matrix, that is defined by params->first_line to params->first_row + params->num_rows.
+ */
+void init(double** chunk, const Params* params)
+{
+//#define LOG_INIT(...) fprintf(stderr, "%i: init: " __VA_ARGS__);
+#define LOG_INIT(...)
+	const unsigned row_len = params->row_len;
+	const int rank = params->rank;
+	const int num_tasks = params->num_tasks;
+	assert(row_len > 0);
+
+	double h = 1.0 / (double) row_len;
+	LOG_INIT("h is %lf\n", params->rank, h);
+
+	for (unsigned y = 0; y < params->num_rows; y++)
 	{
-		for (unsigned i = first_line; i <= first_line + num_lines; i++)
+		memset(chunk[y], 0, row_len * sizeof(chunk[y][0]));
+	}
+
+	if (!params->use_stoerfunktion)
+	{
+		/* Initialize first and last element of a matrix row */
+		for (unsigned y = 0; y < params->num_rows; y++)
 		{
-			chunk[i][0] = 1.0 - (h * i);
-			chunk[i][N] = h * i;
+			chunk[y][0] = 1.0 - (h * y);
+			chunk[y][row_len - 1] = h * y;
 		}
 
 		if (rank == 0)
 		{
-			for (unsigned i = 0; i <= N; i++)
+			/* initialize top row */
+			for (unsigned x = 0; x < row_len; x++)
 			{
-				chunk[0][i] = 1.0 - (h * i);
+				chunk[0][x] = 1.0 - (h * x);
+				LOG_INIT("chunk[0][%u] is %lf\n", params->rank, x, chunk[0][x]);
 			}
-			chunk[0][N] = 0.0;
+			chunk[0][row_len - 1] = 0.0;
 		}
 		else if (rank == num_tasks - 1)
 		{
-			for (unsigned i = 0; i <= N; i++)
+			/* initialize bottom row */
+			for (unsigned x = 0; x < row_len; x++)
 			{
-				chunk[N][i] = h * i;
+				chunk[params->num_rows - 1][x] = h * x;
+				LOG_INIT("chunk[%u][%u] is %lf\n", params->rank, params->num_rows - 1, x, chunk[params->num_rows - 1][x]);
 			}
-			chunk[N][0] = 0.0;
+			chunk[params->num_rows - 1][0] = 0.0;
 		}
 	}
 }
 
-#include <omp.h>
-
-double compute(double** current, double** next, unsigned N, unsigned first_line, unsigned num_lines, unsigned use_stoerfunktion)
+double compute(double** const src, double** dest, const Params* params)
 {
 	double maxresiduum = 0;
-	const double h = 1.0 / (double)N;
+	const double h = 1.0 / (double)params->row_len;
 	const double pih = PI * h;
 	const double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
+	//#define LOG_COMP(...) fprintf(stderr, "%i: comp: " __VA_ARGS__);
+	#define LOG_COMP(...)
 
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
-	LOG("%i: compiting %u lines\n", rank, num_lines - 2);
+	LOG_COMP("computing %u lines [%u:%u]\n", rank, params->num_rows - 2, params->first_row + 1, params->first_row + params->num_rows - 2);
 
 	/* over all rows */
 	#pragma omp parallel for
-	for (unsigned i = first_line + 1; i < (first_line + num_lines - 1); i++)
+	for (unsigned y = 1; y < params->num_rows - 1; y++)
 	{
 		double fpisin_i = 0.0;
-		LOG("%i: line %u\n", rank, i);
+		LOG_COMP("calculating row %u\n", rank, y);
 
-		if (use_stoerfunktion)
+		if (params->use_stoerfunktion)
 		{
-			fpisin_i = fpisin * sin(pih * (double)i);
+			fpisin_i = fpisin * sin(pih * (double)y);
 		}
 
-		/* over all columns */
-		for (unsigned j = 1; j < N; j++)
+		/* over all columns, excluding borders */
+		for (unsigned x = 1; x < (params->row_len - 1); x++)
 		{
-			double star = 0.25 * (current[i-1][j] + current[i][j-1] + current[i][j+1] + current[i+1][j]);
+			double star = 0.25 * (/* left*/ src[y-1][x] + /* right */ src[y+1][x] +
+								  /*bottom*/ src[y][x-1] + /* up */ src[y][x+1]);
 
-			if (use_stoerfunktion)
+			if (params->use_stoerfunktion)
 			{
-				star += fpisin_i * sin(pih * (double)j);
+				star += fpisin_i * sin(pih * (double)x);
 			}
 
 			//if (options->termination == TERM_PREC || term_iteration == 1)
 			{
-				double residuum = current[i][j] - star;
+				double residuum = src[y][x] - star;
 				residuum = (residuum < 0) ? -residuum : residuum;
 
 				#pragma omp critical
@@ -109,186 +140,282 @@ double compute(double** current, double** next, unsigned N, unsigned first_line,
 					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
 				}
 			}
-
-			next[i][j] = star;
+			dest[y][x] = star;
 		}
 	}
 	return maxresiduum;
 }
 
 
-#define TAG_SEND_UP 1
-#define TAG_SEND_DOWN 2
-void communicate(double** current, unsigned N, unsigned num_lines)
+#define TAG_COMM_UP 1
+#define TAG_COMM_DOWN 2
+void communicate_jacobi(double** current, const Params* params)
 {
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+//#define LOG_COMM(...) fprintf(stderr, "%i: comm: " __VA_ARGS__);
+#define LOG_COMM(...)
+	const int rank = params->rank;
+	const int num_tasks = params->num_tasks;
+	const unsigned row_length = params->row_len;
 
 	int next_rank = (rank == num_tasks - 1) ? 0 : rank + 1;
 	int prev_rank = (rank == 0) ? num_tasks - 1 : rank - 1;
 
-	LOG("%i: comm with %u and %u\n", rank, prev_rank, next_rank);
+	LOG_COMM("<-> u:%u, d:%u\n", rank, prev_rank, next_rank);
 
 
-	MPI_Request oben_request[2], unten_request[2];
+	MPI_Request top_request[2], bottom_request[2];
 	MPI_Status status;
 
+
 	/**
-	 * Kommuniziere mit unten (alle ausser dem letzten Rank)
+	 * Communicate with the rank above.
+	 * Send them our 1st row and receive the 0th.
 	 */
-	if (rank != num_tasks - 1)
+	if (rank != 0) /* 0th rank doesn't send or receive anything above */
 	{
-		 MPI_Isend(current[num_lines - 2], N, MPI_DOUBLE, next_rank, TAG_SEND_DOWN, MPI_COMM_WORLD, &unten_request[0]);
-		 MPI_Irecv(current[num_lines - 1], N, MPI_DOUBLE, next_rank, TAG_SEND_UP, MPI_COMM_WORLD, &unten_request[1]);
+		MPI_Isend(current[1],                     row_length, MPI_DOUBLE, prev_rank, TAG_COMM_UP, MPI_COMM_WORLD,   &top_request[0]);
+		MPI_Irecv(current[0],                     row_length, MPI_DOUBLE, prev_rank, TAG_COMM_DOWN, MPI_COMM_WORLD, &bottom_request[0]);
+	}
+
+	/*
+	 * Communicate with bottom:
+	 * send one before bottom row and receive bottom row.
+	 */
+	if (rank != num_tasks - 1) /* last rank doesn't send or receive anything from below */
+	{
+		 MPI_Isend(current[params->num_rows - 2], row_length, MPI_DOUBLE, next_rank, TAG_COMM_DOWN, MPI_COMM_WORLD, &bottom_request[1]);
+		 MPI_Irecv(current[params->num_rows - 1], row_length, MPI_DOUBLE, next_rank, TAG_COMM_UP, MPI_COMM_WORLD,   &top_request[1]);
 	}
 
 	/**
-	 * Kommuniziere mit oben (alle ausser dem 0-ten rank)
+	 * Wait for completion
 	 */
+
 	if (rank != 0)
 	{
-		MPI_Isend(current[1], N, MPI_DOUBLE, prev_rank, TAG_SEND_UP, MPI_COMM_WORLD, &oben_request[0]);
-		MPI_Irecv(current[0], N, MPI_DOUBLE, prev_rank, TAG_SEND_DOWN, MPI_COMM_WORLD, &oben_request[1]);
+		MPI_Wait(&top_request[0], &status);
+		MPI_Wait(&bottom_request[0], &status);
 	}
 
 	if (rank != num_tasks - 1)
 	{
-		MPI_Wait(&unten_request[0], &status);
-		MPI_Wait(&unten_request[1], &status);
-	}
-	if (rank != 0)
-	{
-		MPI_Wait(&oben_request[0], &status);
-		MPI_Wait(&oben_request[1], &status);
+		MPI_Wait(&bottom_request[1], &status);
+		MPI_Wait(&top_request[1], &status);
 	}
 }
 
-void calculate_lines(unsigned N, unsigned* the_first_line, unsigned* the_num_lines)
+void calculate_row_offsets(Params* params)
 {
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+	assert(params->num_tasks);
+	div_t d = div(params->row_len, params->num_tasks);
+	unsigned num_rows = d.quot;
 
-	div_t d = div((N + 1), num_tasks);
-	unsigned num_lines = d.quot;
-	if (rank < d.rem)
+	/**
+	 * Give some tasks more rows based on their rank.
+	 * TODO rebalance
+	 */
+	if (params->rank < d.rem)
 	{
-		num_lines++;
+		num_rows++;
 	}
 
-	unsigned first_line = 0;
-	for (int i = 0; i < rank; i++)
+	unsigned first_row = 0;
+	for (int i = 0; i < params->rank; i++)
 	{
-		first_line += d.quot;
+		first_row += d.quot;
 		if (i < d.rem)
 		{
-			first_line ++;
+			first_row ++;
 		}
 	}
 
 	/**
-	 * Erzeuge überlappung (sieh bild)
+	 * create overlap.
 	 */
-	if (rank != num_tasks - 1)
+	if (params->rank != params->num_tasks - 1)
 	{
-		num_lines += 2;
+		num_rows += 2;
 	}
 
-
-	//assert(first_line_loop == first_line);
-
-	*the_first_line = first_line;
-	*the_num_lines = num_lines;
+	params->first_row = first_row;
+	params->num_rows = num_rows;
+	//LOG("%u: first row: %u, num_rows: %u\n", params->rank, params->first_row, params->num_rows);
 }
 
 /* ************************************************************************ */
 /* allocateMemory ()                                                        */
 /* allocates memory and quits if there was a memory allocation problem      */
 /* ************************************************************************ */
-static void* allocateMemory (size_t size)
+static void* allocate_memory (size_t size)
 {
-	void *p;
-
-	if ((p = malloc(size)) == NULL)
+	void * mem = malloc(size);
+	if (!mem)
 	{
-		printf("Speicherprobleme! %lu\n", size);
-		/* exit program */
-		exit(1);
+		printf("Failed to allocate %lu bytes\n", size);
+		MPI_Abort(MPI_COMM_WORLD, 10);
 	}
-
-	return p;
+	return mem;
 }
 
-
-double*** allocateMatrices (unsigned N, double** freeme)
+void allocate_matrix_chunks (Params* params)
 {
-	double*** Matrix;
-	double* M = calloc(sizeof(double), NUM_CHUNKS * (N + 1) * (N + 1));
-	if (!M)
+	const size_t chunk_size = params->row_len * params->num_rows;
+	params->mem_pool = allocate_memory(chunk_size * params->num_chunks * sizeof(double));
+
+	params->chunk = allocate_memory(params->num_chunks * sizeof(double**));
+	for (unsigned chunk_num = 0; chunk_num < params->num_chunks; chunk_num++)
 	{
-		perror("calloc failed\n");
-		exit(EXIT_FAILURE);
-	}
-
-	Matrix = allocateMemory(NUM_CHUNKS * sizeof(double**));
-
-	for (uint64_t i = 0; i < NUM_CHUNKS; i++)
-	{
-		Matrix[i] = allocateMemory((N + 1) * sizeof(double*));
-
-		for (uint64_t j = 0; j <= N; j++)
+		params->chunk[chunk_num] = allocate_memory(params->num_rows * sizeof(double*));
+		for (unsigned y = 0; y < params->num_rows; y++)
 		{
-			Matrix[i][j] = M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
+			params->chunk[chunk_num][y] = params->mem_pool + (chunk_num * chunk_size) + (y * params->row_len);
 		}
 	}
-
-	*freeme = M;
-	return Matrix;
 }
 
-void display(double** chunk, unsigned interlines, unsigned first_line, unsigned num_lines)
+void clean_up(Params* params)
 {
-	MPI_Status status;
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
+	LOG("%d: cleanup\n", params->rank);
+	for (unsigned chunk_num = 0; chunk_num < params->num_chunks; chunk_num++)
+	{
+		free(params->chunk[chunk_num]);
+	}
+	free(params->chunk);
+	free(params->mem_pool);
+}
 
-	unsigned N = (interlines * 8) + 9;
-	unsigned  advance = interlines + 1;
+void display(double** chunk, const Params* params, double max_residuum, unsigned num_iterations)
+{
+	//#define LOG_DISP(...) fprintf(stderr, "%i: disp: " __VA_ARGS__);
+	#define LOG_DISP(...)
+	FILE * out = stderr;
+	MPI_Status status;
+	const int rank = params->rank;
+	const unsigned  advance = params->interlines + 1;
+
+	const unsigned x0 = 1;
+	const unsigned x1 = params->row_len - 1;
+	const unsigned y0 = 1;
+	const unsigned y1 = params->row_len - 1;
+
 
 	if (rank == 0)
 	{
-		double* line = chunk[1];
-		for (unsigned i = 1; i <= N; i += advance)
+		unsigned rank0_last_row = params->first_row + params->num_rows - 1;
+		LOG_DISP("rank0_last_row %u\n", rank, rank0_last_row);
+		double* row = chunk[0]; // first row to display. also reuse to receive next row
+		for (unsigned row_index = y0; row_index < y1; row_index += advance)
 		{
-			if (i >= first_line + num_lines)
+			LOG_DISP("row_index %u\n", rank, row_index);
+			/**
+			 * Do we have this row? If not, try to receive it.
+			 */
+			if (row_index <= rank0_last_row)
 			{
-				LOG("%d: receiving line %u\n", rank, i);
-				MPI_Recv(line, N + 2, MPI_DOUBLE, MPI_ANY_SOURCE, i, MPI_COMM_WORLD, &status);
+				LOG_DISP("using our row %u\n", rank, row_index);
+				row = chunk[row_index];
+			}
+			else
+			{
+				LOG_DISP("receiving row %u\n", rank, row_index);
+				MPI_Recv(row, params->row_len, MPI_DOUBLE, MPI_ANY_SOURCE, row_index, MPI_COMM_WORLD, &status);
 			}
 
-			for (unsigned j = 1; j <= N; j += advance)
+			for (unsigned x = x0; x < x1; x += advance)
 			{
-				printf("%4.4f ", line[j]);
+				fprintf(out, "%4.4f ", row[x]);
 			}
-			printf("\n");
+			fprintf(out, "\n");
 		}
+		fprintf(out, "max residuum is: %lf, number of iterations done: %u\n", max_residuum, num_iterations);
 	}
 	else
 	{
-		for (unsigned i = 1; i <= (num_lines - 1); ++i)
+		for (unsigned row_index = y0; row_index < y1; row_index += advance)
 		{
-			unsigned world_line_num = first_line + i;
-			LOG("%d: world_line_num %u\n", rank, world_line_num);
-			if ((world_line_num - 1) % advance == 0)
+			/*
+			 * Assume the process before us already send 2
+			 */
+			if (row_index >= (params->first_row + 2) && (row_index < params->first_row + params->num_rows))
 			{
-				LOG("%d: sending line %u\n", rank, world_line_num);
-				double* line = chunk[i];
-				MPI_Send(line, N + 2, MPI_DOUBLE, 0, world_line_num, MPI_COMM_WORLD);
+				const unsigned local_index = row_index - params->first_row;
+				LOG_DISP("sending row %u\n", rank, row_index);
+				MPI_Send(chunk[local_index], params->row_len, MPI_DOUBLE, 0, row_index, MPI_COMM_WORLD);
 			}
 		}
 	}
+}
+
+void print_params(const Params* params)
+{
+	printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
+	printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
+	printf("%i: use_stoerfunktion : %i\n", params->rank, params->use_stoerfunktion);
+	printf("%i: target_residuum : %lf\n", params->rank, params->target_residuum);
+	printf("%i: target_iteration : %u\n", params->rank, params->target_iteration);
+	printf("%i: interlines : %u\n", params->rank, params->interlines);
+	printf("%i: row_len: %u\n", params->rank, params->row_len);
+	printf("%i: first_row : %u\n", params->rank, params->first_row);
+	printf("%i: num_rows : %u\n", params->rank, params->num_rows);
+	printf("%i: chunks mem usage: : %6.3lf kb\n", params->rank, ((double)(params->num_chunks * params->num_rows * params->row_len * sizeof(double)) / (double)(1024)));
+#ifdef _OPENMP
+	printf("%i: omp_num_threads : %u\n", params->rank, params->omp_num_threads);
+#endif
+
+}
+
+/**
+ * parses input and stores it in params.
+ */
+void parse_cmd_line(int argc, char** argv, Params* params)
+{
+	if (argc < 3)
+	{
+		printf("Arguments error\n");
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+
+	if (sscanf(argv[1], "%u", &params->interlines) != 1)
+	{
+		printf("expecting 1st argument of unsigned type\n");
+		MPI_Abort(MPI_COMM_WORLD, 2);
+	}
+	params->row_len = (params->interlines * 8) + 9;
+
+	if ((sscanf(argv[2], "%u", &params->use_stoerfunktion) != 1) ||
+		(params->use_stoerfunktion > 1))
+	{
+		printf("expecting 2nd argument of boolean type (0 or 1)\n");
+		MPI_Abort(MPI_COMM_WORLD, 3);
+	}
+
+	if (sscanf(argv[3], "%u", &params->target_iteration) != 1)
+	{
+		printf("expecting 3nd argument of unsigned type\n");
+		MPI_Abort(MPI_COMM_WORLD, 4);
+	}
+
+	unsigned stop_after_precision_reached = (params->target_iteration == 0);
+	if (stop_after_precision_reached)
+	{
+		if (argc < 4)
+		{
+			printf("expecting max residuum as a 4rth argument\n");
+			MPI_Abort(MPI_COMM_WORLD, 5);
+		}
+
+		if (sscanf(argv[4], "%lf", &params->target_residuum) != 1)
+		{
+			printf("max residuum should be a double\n");
+			MPI_Abort(MPI_COMM_WORLD, 6);
+		}
+	}
+
+#ifdef _OPENMP
+	params->omp_num_threads = omp_get_thread_num();
+#else
+	params->omp_num_threads = 0;
+#endif
 }
 
 /**
@@ -298,134 +425,75 @@ void display(double** chunk, unsigned interlines, unsigned first_line, unsigned 
  */
 int main(int argc, char** argv)
 {
+	#define LOG_MAIN(...) fprintf(stderr, "%i: main: " __VA_ARGS__);
+	//#define LOG_MAIN(...)
+
+
 	int rc = MPI_Init(&argc, &argv);
 	if (rc != MPI_SUCCESS)
 	{
 		fprintf(stderr, "MPI_Init failed!\n");
 		exit(EXIT_FAILURE);
 	}
+	Params params;
+	params.num_chunks = 2;
+	MPI_Comm_rank(MPI_COMM_WORLD, &params.rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &params.num_tasks);
 
-	/**
-	 * Parsing input
-	 */
-	if (argc < 3)
-	{
-		printf("Arguments error\n");
-		MPI_Abort(MPI_COMM_WORLD, 1);
-	}
+	parse_cmd_line(argc, argv, &params);
+	calculate_row_offsets(&params);
 
-	unsigned interlines;
-	if (sscanf(argv[1], "%u", &interlines) != 1)
-	{
-		printf("expecting 1st argument of unsigned type\n");
-		MPI_Abort(MPI_COMM_WORLD, 2);
-	}
-	unsigned N = (interlines * 8) + 9;
-
-	unsigned use_stoerfunktion;
-	if (sscanf(argv[3], "%u", &use_stoerfunktion) != 1)
-	{
-		printf("expecting 2nd argument of boolean type\n");
-		MPI_Abort(MPI_COMM_WORLD, 3);
-	}
-
-	unsigned target_iter;
-	if (sscanf(argv[3], "%u", &target_iter) != 1)
-	{
-		printf("expecting 3nd argument of unsigned type\n");
-		MPI_Abort(MPI_COMM_WORLD, 4);
-	}
-	unsigned stop_after_precision_reached = (target_iter == 0);
-	double target_residuum;
-	if (stop_after_precision_reached)
-	{
-		if (argc < 4)
-		{
-			printf("expecting max residuum as a 4rth argument\n");
-			MPI_Abort(MPI_COMM_WORLD, 5);
-		}
-
-		if (sscanf(argv[4], "%lf", &target_residuum) != 1)
-		{
-			printf("max residuum should be a double\n");
-			MPI_Abort(MPI_COMM_WORLD, 6);
-		}
-	}
-
-	/**
-	 * Main Programm, obligatory mpi queries, calculating chunk sizes
-	 */
-
-
-	int rank, num_tasks;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
-
-	unsigned first_line, num_lines;
-	calculate_lines(N, &first_line, &num_lines);
-	LOG("%d: N: %u, num_tasks: %i, first_line: %u, num lines is %u\n", rank, N, num_tasks, first_line, num_lines);
-	//MPI_Finalize();
-	//return 0;
-
+	print_params(&params);
 	MPI_Barrier(MPI_COMM_WORLD);
+	unsigned stop_after_precision_reached = (params.target_iteration == 0);
 
-	/**
-	 * Dies ist ein Teil unserer Matrix.
-	 * Die erste und die letzten Zeilen sind ränder und werden vom compute() nicht angefasst,
-	 * nur unter benachbarten Prozessen ausgetauscht.
-	 */
-	double* M;
-	double*** chunk = allocateMatrices(N, &M);
-	double reduced_max_residuum;
-	double max_residuum;
-	LOG("%d: main algorithm\n", rank);
 
-	init(chunk[0], first_line, first_line + num_lines, N, use_stoerfunktion);
-
-	unsigned curr = 0, next;
-	for (unsigned iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
+	allocate_matrix_chunks(&params);
+	for (unsigned i = 0; i < params.num_chunks; ++i)
 	{
-		next = (curr + 1) % NUM_CHUNKS;
-		communicate(chunk[curr], N, num_lines);	//Zeilenaustausch
-		max_residuum = compute(chunk[curr], chunk[next], N, first_line, num_lines, use_stoerfunktion);
-		curr = next;
+		init(params.chunk[i], &params);
+	}
+
+	double reduced_max_residuum;
+	unsigned curr = 0;
+	unsigned next = (curr + 1) % params.num_chunks;
+	unsigned iter = 0;
+	for (;; iter++)
+	{
+		communicate_jacobi(params.chunk[curr], &params);
+		double max_residuum = compute(params.chunk[curr], params.chunk[next], &params);
 		if (stop_after_precision_reached)
 		{
-			MPI_Reduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-
-			if (reduced_max_residuum < target_residuum)
+			/* all prozesses need max residuum */
+			MPI_Allreduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+			if (reduced_max_residuum < params.target_residuum)
 			{
 				break;
 			}
 		}
+		else if (iter >= params.target_iteration)
+		{
+			/* only rank 0 needs max residuum */
+			MPI_Reduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+			break;
+		}
+		curr = next;
+		next = (next + 1) % params.num_chunks;
 	}
 
-	curr = (curr + 1) % NUM_CHUNKS;
-
-	if (!stop_after_precision_reached)
-	{
-		reduced_max_residuum = max_residuum;
-	}
-
+	curr = (curr + 1) % params.num_chunks;
 
 	MPI_Barrier(MPI_COMM_WORLD);
+
 	fflush(stdout);
 	fflush(stderr);
-	usleep(140);
+	usleep(500);
 
-	display(chunk[curr], interlines, first_line, num_lines);
-	if (rank == 0)
-	{
-		printf("max residuum is %lf\n", reduced_max_residuum);
-	}
 
-	LOG("%d: cleanup\n", rank);
-	free(M);
-	for (unsigned i = 0; i < NUM_CHUNKS; ++i)
-	{
-		free(chunk[i]);
-	}
-	free(chunk);
+	display(params.chunk[next], &params, reduced_max_residuum, iter + 1);
+
+	clean_up(&params);
 	MPI_Finalize();
+	return EXIT_SUCCESS;
 }
 
