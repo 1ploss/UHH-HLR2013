@@ -18,12 +18,25 @@
 #else
 #define LOG(...)
 #endif
+//#define TEST_VALUES
+
 
 #ifndef PI
 #define PI           3.14159265358979323846
 #endif
 #define TWO_PI_SQUARE (2.0 * PI * PI)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+typedef struct
+{
+	unsigned x0;
+	unsigned x1;
+	unsigned y0;
+	unsigned y1;
+	unsigned advance;
+	int		 show_next_chunk_line;
+} Display_Params;
 
 typedef struct
 {
@@ -47,10 +60,57 @@ typedef struct
 /**
  * Initializes part of a matrix, that is defined by params->first_line to params->first_row + params->num_rows.
  */
-void init(double** chunk, const Params* params)
+void init_chunk(double** chunk, const Params* params)
 {
 //#define LOG_INIT(...) fprintf(stderr, "%i: init: " __VA_ARGS__);
 #define LOG_INIT(...)
+
+#ifdef TEST_VALUES
+	const double border_value = NAN;
+
+	/* Initialize first and last element of a matrix row */
+	for (unsigned y = 0; y < params->num_rows; y++)
+	{
+		unsigned world_y = params->first_row + y;
+		if (y == 0 || y == params->num_rows - 1)
+		{
+			for (unsigned x = 0; x < params->row_len; ++x)
+			{
+				chunk[y][x] = 0;
+			}
+		}
+		else
+		{
+			for (unsigned x = 0; x < params->row_len; ++x)
+			{
+				if (x == 0 || x == params->row_len - 1)
+				{
+					chunk[y][x] = border_value;
+				}
+				else
+				{
+					chunk[y][x] = world_y;
+				}
+			}
+		}
+	}
+
+	if (params->rank == 0)
+	{
+		for (unsigned x = 0; x < params->row_len; ++x)
+		{
+			chunk[0][x] = border_value;
+		}
+	}
+	else if (params->rank == params->num_tasks - 1)
+	{
+		for (unsigned x = 0; x < params->row_len; ++x)
+		{
+			chunk[params->num_rows - 1][x] = border_value;
+		}
+	}
+
+#else
 	const unsigned row_len = params->row_len;
 	const int rank = params->rank;
 	const int num_tasks = params->num_tasks;
@@ -94,6 +154,7 @@ void init(double** chunk, const Params* params)
 			chunk[params->num_rows - 1][0] = 0.0;
 		}
 	}
+#endif
 }
 
 double compute(double** const src, double** dest, const Params* params)
@@ -284,27 +345,21 @@ void clean_up(Params* params)
 	free(params->mem_pool);
 }
 
-void display(double** chunk, const Params* params, double max_residuum, unsigned num_iterations)
+
+void display(double** chunk, const Params* params, Display_Params* dp, double max_residuum, unsigned num_iterations)
 {
 	//#define LOG_DISP(...) fprintf(stderr, "%i: disp: " __VA_ARGS__);
 	#define LOG_DISP(...)
 	FILE * out = stderr;
-	MPI_Status status;
 	const int rank = params->rank;
-	const unsigned  advance = params->interlines + 1;
-
-	const unsigned x0 = 1;
-	const unsigned x1 = params->row_len - 1;
-	const unsigned y0 = 1;
-	const unsigned y1 = params->row_len - 1;
-
 
 	if (rank == 0)
 	{
 		unsigned rank0_last_row = params->first_row + params->num_rows - 1;
 		LOG_DISP("rank0_last_row %u\n", rank, rank0_last_row);
 		double* row = chunk[0]; // first row to display. also reuse to receive next row
-		for (unsigned row_index = y0; row_index < y1; row_index += advance)
+		int last_source = 0;
+		for (unsigned row_index = dp->y0; row_index < dp->y1; row_index += dp->advance)
 		{
 			LOG_DISP("row_index %u\n", rank, row_index);
 			/**
@@ -318,10 +373,16 @@ void display(double** chunk, const Params* params, double max_residuum, unsigned
 			else
 			{
 				LOG_DISP("receiving row %u\n", rank, row_index);
+				MPI_Status status;
 				MPI_Recv(row, params->row_len, MPI_DOUBLE, MPI_ANY_SOURCE, row_index, MPI_COMM_WORLD, &status);
+				if (dp->show_next_chunk_line && status.MPI_SOURCE != last_source)
+				{
+					fprintf(out, "------------------------------[from %i]-------------------------------------------\n", status.MPI_SOURCE);
+					last_source = status.MPI_SOURCE;
+				}
 			}
 
-			for (unsigned x = x0; x < x1; x += advance)
+			for (unsigned x = dp->x0; x < dp->x1; x += dp->advance)
 			{
 				fprintf(out, "%4.4f ", row[x]);
 			}
@@ -331,7 +392,15 @@ void display(double** chunk, const Params* params, double max_residuum, unsigned
 	}
 	else
 	{
-		for (unsigned row_index = y0; row_index < y1; row_index += advance)
+		unsigned begin = params->first_row + 2;
+		while (((begin - dp->y0) % dp->advance) != 0)
+		{
+			begin++;
+		}
+		const unsigned end = MIN(dp->y1, (params->first_row + params->num_rows));
+
+		LOG_DISP("begin %u, end %u\n", params->rank, begin, end);
+		for (unsigned row_index = begin; row_index < end; row_index += dp->advance)
 		{
 			/*
 			 * Assume the process before us already send 2
@@ -443,15 +512,15 @@ int main(int argc, char** argv)
 	parse_cmd_line(argc, argv, &params);
 	calculate_row_offsets(&params);
 
-	print_params(&params);
-	MPI_Barrier(MPI_COMM_WORLD);
+	//print_params(&params);
+	//MPI_Barrier(MPI_COMM_WORLD);
 	unsigned stop_after_precision_reached = (params.target_iteration == 0);
 
 
 	allocate_matrix_chunks(&params);
 	for (unsigned i = 0; i < params.num_chunks; ++i)
 	{
-		init(params.chunk[i], &params);
+		init_chunk(params.chunk[i], &params);
 	}
 
 	double reduced_max_residuum;
@@ -481,17 +550,41 @@ int main(int argc, char** argv)
 		next = (next + 1) % params.num_chunks;
 	}
 
-	curr = (curr + 1) % params.num_chunks;
-
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	fflush(stdout);
 	fflush(stderr);
 	usleep(500);
 
+	// show full matrix
+	// Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
 
-	display(params.chunk[next], &params, reduced_max_residuum, iter + 1);
+	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
+	display(params.chunk[curr], &params, &dp, reduced_max_residuum, iter);
 
+#ifdef SHOW_FIRST2_LINES
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	fflush(stdout);
+	fflush(stderr);
+	MPI_Barrier(MPI_COMM_WORLD);
+	usleep(200 + 100 * params.rank);
+
+	if (1)
+	{
+		for (unsigned y = 0; y < 2; y ++)
+		{
+			fprintf(stdout, "%i: y: %u | ", params.rank, params.first_row + y);
+			for (unsigned x = dp.x0; x < dp.x1; x += dp.advance)
+			{
+				fprintf(stdout, "%4.4f ", params.chunk[curr][y][x]);
+			}
+			fprintf(stdout, "\n");
+		}
+	}
+	fflush(stdout);
+	fflush(stderr);
+#endif
 	clean_up(&params);
 	MPI_Finalize();
 	return EXIT_SUCCESS;
