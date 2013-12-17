@@ -1,8 +1,8 @@
 # Common definitions
-CC = gcc
+CC = mpicc
 
 # Compiler flags, paths and libraries
-CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2 -ggdb
+CFLAGS = -std=c99 -pedantic -Wall -Wextra -Wno-unknown-pragmas -O0 -ggdb
 LFLAGS = $(CFLAGS)
 LIBS   = -lm
 
@@ -19,7 +19,7 @@ partdiff-seq: $(OBJS) Makefile
 	$(CC) $(LFLAGS) -o $@ $(OBJS) $(LIBS)
 
 clean:
-	$(RM) *.o *~
+	$(RM) *.o *~ partdiff-seq.exe
 
 partdiff-seq.o: partdiff-seq.c Makefile
 

@@ -16,6 +16,7 @@
 /* *********************************** */
 #include <math.h>
 #include <stdint.h>
+#include <mpi.h>
 
 /* ************* */
 /* Some defines. */
