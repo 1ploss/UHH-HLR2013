@@ -37,6 +37,8 @@ struct calculation_arguments
 	double    h;              /* length of a space between two lines            */
 	double    ***Matrix;      /* index matrix used for addressing M             */
 	double    *M;             /* two matrices with real values                  */
+	double	  *receverow;	  /* row of the upper process						*/
+	double	  *sendrow;		  /* last of the own rows, to send down				*/
 	uint64_t  firstRow;		  /* global Index of the local Index 0				*/
 	uint64_t  rows;			  /* Number of local rows							*/
 	//TODO möglicherweise müssen wir hier noch mehr einführen
@@ -124,20 +126,25 @@ allocateMatrices (struct calculation_arguments* arguments)
 	uint64_t i, j;
 
 	uint64_t const N = arguments->N;
+	uint64_t const rows = arguments->rows;
+	double* receiverow = arguments->receverow;
+	double* sendrow = arguments->sendrow;
 
-	//TODO anpassen
-	arguments->M = allocateMemory(arguments->num_matrices * (N + 1) * (N + 1) * sizeof(double));
+	//TODO auf richtigkeit überprüfen
+	arguments->M = allocateMemory(arguments->num_matrices * rows * (N + 1) * sizeof(double));
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
 
-	for (i = 0; i < arguments->num_matrices; i++)
+	for (i = 0; i < arguments->num_matrices; i++)//in unserem Fall wohl immer 1 mal
 	{
-		arguments->Matrix[i] = allocateMemory((N + 1) * sizeof(double*));
+		arguments->Matrix[i] = allocateMemory((N + 1) * sizeof(double*));//richtige Größe?
 
 		for (j = 0; j <= N; j++)
 		{
-			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * (N + 1)) + (j * (N + 1));
+			arguments->Matrix[i][j] = arguments->M + (i * (N + 1) * rows) + (j * (N + 1));
 		}
 	}
+	receiverow = allocateMemory(N+3);
+	sendrow = allocateMemory(N+3);
 }
 
 /* ************************************************************************ */
@@ -154,10 +161,12 @@ initMatrices (struct calculation_arguments* arguments, struct options const* opt
 	double*** Matrix = arguments->Matrix;
 	uint64_t const rows = arguments->rows;
 	uint64_t const firstRow = arguments->firstRow;
+	double* receiverow = arguments->receverow;
+	double* sendrow = arguments->sendrow;
 	/* initialize matrix/matrices with zeros */
 	for (g = 0; g < arguments->num_matrices; g++)
 	{
-		for (i = 0; i < rows; i++)//TODO überprüfen, ob das so stimmt
+		for (i = 0; i < rows-1; i++)//TODO überprüfen, ob das so stimmt
 		{
 			for (j = 0; j <= N; j++)
 			{
@@ -166,25 +175,47 @@ initMatrices (struct calculation_arguments* arguments, struct options const* opt
 		}
 	}
 
+	for (j = 0; j <= N+2; j++)
+	{
+		receiverow[j] = 0.0;
+		sendrow[j] = 0.0;
+	}
+
+
 	/* initialize borders, depending on function (function 2: nothing to do) */
 	if (options->inf_func == FUNC_F0)
 	{
 		for (g = 0; g < arguments->num_matrices; g++)
 		{
-			for (i = 0; i < rows; i++)
+			for (i = 0; i < rows-1; i++)
 			{
 				globali=firstRow+i;
 				Matrix[g][i][0] = 1.0 - (h * globali);
 				Matrix[g][i][N] = h * globali;
-				/*TODO die Fälle, der erste oder der letzte Prozess zu sein behandeln
-				Matrix[g][0][i] = 1.0 - (h * i);
-				Matrix[g][N][i] = h * i;
+				//TODO die Fälle, der erste oder der letzte Prozess zu sein behandeln
+				if(ProcessNumber==0)
+				{
+					Matrix[g][0][i] = 1.0 - (h * i);
+				}
+				if(ProzessNumber==NumberProcesses-1)
+				{
+					Matrix[g][rows-1][i] = h * i;
+				}
 			}
-
-			Matrix[g][N][0] = 0.0;
-			Matrix[g][0][N] = 0.0;
-			*/}
 		}
+		if(ProcessNumber==0)
+		{
+			Matrix[g][0][N] = 0.0;
+		}
+		if(ProzessNumber==NumberProcesses-1)
+		{
+			Matrix[g][rows-1][0] = 0.0;
+		}
+
+		receiverow[0] = 1.0-(h*(firstRow-1));
+		receiverow[N] = (h*(firstRow-1));
+		sendrow[0] = 1.0-(h*(firstRow+rows-1));
+		sendrow[N] = (h*(firstRow+rows-1));
 	}
 }
 
