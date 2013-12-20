@@ -394,7 +394,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 			}
 			MPI_Isend(Matrix_Out[0],N+1,MPI_DOUBLE, rank-1,1,MPI_COMM_WORLD,&sendUpRequest);//neu berechnete Zeile auf den Weg schick
-			MPI_Irecv(receverow,N+3,MPI_DOUBLE, rank-1,0,MPI_COMM_WORLD, &recvFromUpStatus);
+			MPI_Irecv(receverow,N+3,MPI_DOUBLE, rank-1,0,MPI_COMM_WORLD, &recvFromUpRequest);
 		}
 
 		/* over all remaining rows */
@@ -483,7 +483,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			term_iteration=receverow[N];
 			sendrow[N]=term_iteration;//Die Stopnachricht wird weiter gereicht
 			sendrow[N+1]=maxresiduum;
-			MPI_Isend(&sendrow, N+3, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD,sendDownRequest);
+			MPI_Isend(&sendrow, N+3, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD,&sendDownRequest);
 		}
 	}
 	for(int i=0;rank<lastRank&&i<N;i++)//Nach der Berechnung werden die Daten von Sendrow in die Matrix aufgenommen, zur leichteren Ausgabe
@@ -555,7 +555,14 @@ displayStatistics (struct calculation_arguments const* arguments, struct calcula
 }
 
 
+static
+void
+DisplayMatrixOld (struct calculation_arguments* arguments, struct calculation_results* results, struct options* options)
+{
+	//TODO DisplayMatrixOld g�nzlich entfernen und Aufruf sinnvoll in Main einbauen.
+	DisplayMatrix("test", arguments->M, options->interlines , arguments->rank , arguments->num_processes, arguments->firstRow, arguments->firstRow+arguments->rows-1);
 
+}
 
 /* ************************************************************************ */
 /*  main                                                                    */
@@ -588,8 +595,8 @@ main (int argc, char** argv)
 	gettimeofday(&comp_time, NULL);                   /*  stop timer          */
 
 	if(!rank) displayStatistics(&arguments, &results, &options);
-	//DisplayMatrixOld(&arguments, &results, &options);//TODO hier möglichst die paralele Version einfügen
-	DisplayMatrix ( "Matrix: ", &(arguments->M), (options->interlines), (rank) , (arguments->rows), (arguments->firstRow), (arguments->firstRow+arguments->rows));
+	DisplayMatrixOld(&arguments, &results, &options);//TODO hier möglichst die paralele Version einfügen
+	//DisplayMatrix ( "Matrix: ", &(arguments->M), (options->interlines), (rank) , (arguments->rows), (arguments->firstRow), (arguments->firstRow+arguments->rows));
 
 	freeMatrices(&arguments);                                       /*  free memory     */
 	MPI_Finalize();
