@@ -1,26 +1,20 @@
-# Common definitions
-CC = gcc
+CC=mpicc
+CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -lm
 
-# Compiler flags, paths and libraries
-CFLAGS = -std=c99 -pedantic -Wall -Wextra -O2 -ggdb
-LFLAGS = $(CFLAGS)
-LIBS   = -lm
+partdiff-par.o: partdiff-par.c Makefile
+	$(CC) $(CFLAGS) -c $< -o $@
 
-OBJS = partdiff-seq.o askparams.o
+partdiff-par: partdiff-par.o
+	$(CC) $(CFLAGS) -ggdb $< -o $@
 
-# Rule to create *.o from *.c
-.c.o:
-	$(CC) -c $(CFLAGS) $*.c
+partdiff-omp.o: partdiff-omp.c Makefile
+	$(CC) $(CFLAGS) -fopenmp -c $< -o $@
+	
+partdiff-omp: partdiff-omp.o
+	$(CC) $(CFLAGS)  -fopenmp -ggdb $< -o $@
 
-# Targets ...
-all: partdiff-seq
-
-partdiff-seq: $(OBJS) Makefile
-	$(CC) $(LFLAGS) -o $@ $(OBJS) $(LIBS)
+all: partdiff-par partdiff-omp
 
 clean:
-	$(RM) *.o *~
-
-partdiff-seq.o: partdiff-seq.c Makefile
-
-askparams.o: askparams.c Makefile
+	rm *.o ; rm -f partdiff-par partdiff-omp
+	

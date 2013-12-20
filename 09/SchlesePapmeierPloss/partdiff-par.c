@@ -29,6 +29,7 @@
 #include <malloc.h>
 #include <sys/time.h>
 
+#include "displaymatrix-mpi.h"
 #include "partdiff-seq.h"
 
 struct calculation_arguments
@@ -94,6 +95,7 @@ initVariables (struct calculation_arguments* arguments, struct calculation_resul
 	{
 		firstRow = firstRow + d.rem;   /*Wenn Rang h�her als Rest gab es bereits N=Rest Prozesse mit extra Zeile*/
 	}
+	/*
 	if(rank == 0) //Gibt so die erste wirklich zu berechnende Zeile und Anzahl Zeilen an. Nimmt sp�ter einige Probleme
 	{
 		firstRow = 1;
@@ -102,7 +104,7 @@ initVariables (struct calculation_arguments* arguments, struct calculation_resul
 	if(rank == num_tasks-1)   //�hnlich nur das firstRow stimmt aber auch hier eine Zeile weniger berechnet wird(wegen R�ndern der Matrix)
 	{
 		numLines--;
-	}
+	}*/
 	arguments->firstRow = firstRow;
 	arguments->rows = numLines;
 	arguments->rank = rank;
@@ -170,7 +172,7 @@ allocateMatrices (struct calculation_arguments* arguments)
 	uint64_t const rows = arguments->rows;
 
 	//TODO anpassen
-	arguments->M = allocateMemory(arguments->num_matrices * (N + 2) * (rows + 1) * sizeof(double));  //Hoffentlich stimmt das mit N+2 Die gesamte Matrix ist so 2 Spalten breiter. Ziemlicher Overkill
+	arguments->M = allocateMemory(arguments->num_matrices * (N + 2) * rows * sizeof(double));  //Hoffentlich stimmt das mit N+2 Die gesamte Matrix ist so 2 Spalten breiter. Ziemlicher Overkill
 																									//funktioniert wohl auch nicht so wie ich das dachte mit dem residuum ans Ende setzen
 	arguments->Matrix = allocateMemory(arguments->num_matrices * sizeof(double**));
 
@@ -223,7 +225,7 @@ initMatrices (struct calculation_arguments* arguments, struct options const* opt
 	for (g = 0; g < arguments->num_matrices; g++)
 	{
 		//Weglassen und bei allocate calloc verwenden?
-		for (i = 0; i < rows+1; i++)//TODO überprüfen, ob das so stimmt.
+		for (i = 0; i < rows; i++)//TODO überprüfen, ob das so stimmt.
 									//Jetzt sind erster und letzter Rank nicht gesondert betrachtet
 									//So m�sste die Variante sein, wenn wir die gesamte verwendete Matrix mit 0 initialisieren wollen
 									//wobei rows als Zeilen die wirklich berechnet werden angesehen ist
@@ -252,7 +254,7 @@ initMatrices (struct calculation_arguments* arguments, struct options const* opt
 		for (g = 0; g < arguments->num_matrices; g++)
 		{
 
-				for (i = 0; i < rows+1; i++)
+				for (i = 0; i < rows; i++)
 				{
 					globali=firstRow+i;   //Entschieden f�r erster und letzter Rank haben eine extra Zeile f�r Nachbarprozesse weniger sehen aber Randzeile als extra Zeile an
 					Matrix[g][i][0] = 1.0 - (h * globali);
@@ -321,8 +323,8 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	MPI_Status sendUpStatus, sendDownStatus,recvTerm,recvFromUpStatus,recvFromDownStatus;
 	double *receverow = allocateMemory(sizeof(double)*(N+2));    /* row of the upper process            */
 	double *sendrow = allocateMemory(sizeof(double)*(N+2));      /* last of the own rows, to send down        */
-	int *stop = allocateMemory(sizeof(int));
-	*stop =0;
+	double *receveFromDownRow = allocateMemory(sizeof(double)*N);      /* first row of the next process to receve  */
+	int stop = 0;
 
 	double pih = 0.0;
 	double fpisin = 0.0;
@@ -358,13 +360,9 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 
 		if(!(results->stat_iteration == 0) && (rank<lastRank)) //Erhalten der 1. Zeile des unteren Prozesses kann jederzeit w�hrend berechnung geschehen.
 		{
-			MPI_Irecv(Matrix_In[rows+1],N+3,MPI_DOUBLE, rank+1,1,MPI_COMM_WORLD, &recvFromDownRequest);  //Hier Irecv zum Segfault (behoben)
+			MPI_Irecv(receveFromDownRow,N+3,MPI_DOUBLE, rank+1,1,MPI_COMM_WORLD, &recvFromDownRequest);  //Hier Irecv zum Segfault (behoben)
 		}
 
-		if((firstRank==0)&&results->stat_iteration==0)
-		{
-			MPI_Irecv(stop,1,MPI_INT,lastRank,42,MPI_COMM_WORLD, &recvTerm);//Rang 0 macht sich bereit für die Nachricht, aufzuhören
-		}
 		//Bisher nur f�r Gauss-Seidel geschrieben. Sollte noch ne Berechnungsmethodenabfrage bekommen
 		//Ist das hier so richtig, dass es nur 1 mal pro Iteration ausgef�hrt wird?
 		if(rank>firstRank)
@@ -373,9 +371,8 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			{
 				MPI_Wait(&sendUpRequest,&sendUpStatus);//für Iterationen > 0 wartet der Prozess, dass die nach oben gesendete Nachricht angekommen ist, bevor er versucht die nächste Zeile zu empfangen
 			}
-			MPI_Wait(&recvFromUpRequest,&recvFromUpStatus);
-			//TODO berechne die oberste Zeile
-			{
+			MPI_Wait(&recvFromUpRequest,&recvFromUpStatus);//Warten, damit die Zeile von Oben empfangen wurde
+			{//Berechnung der obersten Zeile
 				fpisin_i = fpisin * sin(pih * firstrow);//für die erste Zeile gilt firstrow+0
 				for (j = 1; j < N; j++)
 				{
@@ -392,16 +389,16 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 						maxresiduum = (receverow[N+1] < maxresiduum) ? maxresiduum : Matrix_Out[0][N+1]; //Einbeziehen des erhaltenen maxresiduum des vorherigen Prozess
 					}
 
-					Matrix_Out[i][j] = star;
+					Matrix_Out[0][j] = star;
 				}
 
 			}
-			MPI_Isend(Matrix_Out[0],N+1,MPI_DOUBLE, rank-1,1,MPI_COMM_WORLD,&sendUpStatus);//neu berechnete Zeile auf den Weg schick
-			MPI_Irecv(receverow,N+3,MPI_DOUBLE, rank-1,0,MPI_COMM_WORLD, &recvFromUpStatus); //Tags nur sehr provisorisch verwendet zum Testen
+			MPI_Isend(Matrix_Out[0],N+1,MPI_DOUBLE, rank-1,1,MPI_COMM_WORLD,&sendUpRequest);//neu berechnete Zeile auf den Weg schick
+			MPI_Irecv(receverow,N+3,MPI_DOUBLE, rank-1,0,MPI_COMM_WORLD, &recvFromUpStatus);
 		}
 
-		/* over all rows */
-		for (i = 1; i <= rows; i++)    //TODO rows richtig einsetzen Done funktioniert so bisher richtig
+		/* over all remaining rows */
+		for (i = 1; i < rows; i++)    //TODO rows richtig einsetzen Done funktioniert so bisher richtig
 		{
 
 			if (options->inf_func == FUNC_FPISIN)
@@ -410,15 +407,26 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				fpisin_i = fpisin * sin(pih * (double)globali);    //TODO globali richtig einsetzen (Done) nicht sicher aber wahrscheinlich richtig
 																	//Berechnete Werte waren lokal im Vergleich zur sequentiellen Variante gleich
 			}
-			if((i==rows) & (rank<lastRank) & !(results->stat_iteration == 0)) //Seqfault lag daran, dass &recvRequest erst ab stat_iteration > 0 benutzt wird
+
+			if((i==rows) & (rank<lastRank) & !(results->stat_iteration == 0))
 			{
-				MPI_Wait(&recvRequest, MPI_STATUS_IGNORE);  //Produziert Segfault, wieso?
+				MPI_Wait(&sendDownRequest,&sendDownStatus);//bevor ich von unten ne Nachricht erwarten kann, muss meine nach unten angekommen sein
+				MPI_Wait(&recvFromDownRequest, &recvFromDownStatus);//Vor der Ausführung der letzten Zeile auf die Zeile des nächsten Prozesses warten
 			}
 
 			/* over all columns */
 			for (j = 1; j < N; j++)
 			{
-				star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+				if(i<rows-2)
+				{
+					star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + Matrix_In[i+1][j]);
+				}else if(i< rows-1)//die letzte Zeile, die in Rows alloziert ist, braucht Daten der Zeile "sendrow"
+				{
+					star = 0.25 * (Matrix_In[i-1][j] + Matrix_In[i][j-1] + Matrix_In[i][j+1] + sendrow[j]);
+				} else//Berechnung von "sendrow"
+				{
+					star = 0.25 * (Matrix_In[i-1][j] + sendrow[j-1] + sendrow[j+1] + receveFromDownRow[j]);
+				}
 
 				if (options->inf_func == FUNC_FPISIN)
 				{
@@ -430,26 +438,19 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 					residuum = Matrix_In[i][j] - star;
 					residuum = (residuum < 0) ? -residuum : residuum;
 					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
-					if(rank>firstRank)
-					{
-					//	maxresiduum = (Matrix_Out[0][N+1] < maxresiduum) ? maxresiduum : Matrix_Out[0][N+1]; //Einbeziehen des erhaltenen maxresiduum des vorherigen Prozess
-					}
-					if((i==rows) & (j==(N-1)))               //Braucht nur einmal am Ende der Iteration geschrieben werden und nur in der letzten Iteration (wenn nach Iterationen abgebrochen wird)
-					{
-					//	Matrix_Out[rows][N+1] = maxresiduum; //Speichert das MaxResiduum in der letzten Zeile und in einer extra Spalte
-															 //Um nur ein Send einer Zeile ausf�hren zu m�ssen
-															//TODO maxresiduum kann so nicht einfach mit gesendet werden, da bei der fortlaufenden Adressierung wieder Adresse der n�chsten Zeile an Stelle 0 erreicht wird
-					}
+					//Das Maxresiduum des Vorprozesses ist schon durch die Berechnung der ersten Zeile mit einbezogen.
 				}
-
-				Matrix_Out[i][j] = star;
+				if(i<rows)
+				{
+					Matrix_Out[i][j] = star;
+				}else
+				{
+					sendrow[j]= star;
+				}
 			}
 		}
-		//Nach jedem Durchlauf die letzte Zeile nach unten senden
-		if(rank<lastRank)
-		{
-			MPI_Send(Matrix_Out[rows], N+3, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
-		}
+
+
 
 		results->stat_iteration++;
 		results->stat_precision = maxresiduum;
@@ -460,20 +461,40 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		m2 = i;
 
 		/* check for stopping calculation, depending on termination method */
-		if (options->termination == TERM_PREC)  //TODO �ndern
+		if (options->termination == TERM_PREC && rank ==lastRank)  //TODO �ndern
 		{
 			if (maxresiduum < options->term_precision)
 			{
-				term_iteration = 0;
+				MPI_Send(&stop,1,MPI_INT,0,42,MPI_COMM_WORLD);
 			}
 		}
 		else if (options->termination == TERM_ITER) //M�sste schon so stimmen
 		{
 			term_iteration--;
 		}
+		if(rank==0&&MPI_Probe(lastRank,42,MPI_COMM_WORLD,&recvTerm))//der erste Rank checkt ob die Termnachricht kam
+		{
+			term_iteration =0;
+			sendrow[N]=0;
+		}
+		//Nach jedem Durchlauf die letzte Zeile nach unten senden
+		if(rank<lastRank&&!rank)
+		{
+			term_iteration=receverow[N];
+			sendrow[N]=term_iteration;//Die Stopnachricht wird weiter gereicht
+			sendrow[N+1]=maxresiduum;
+			MPI_Isend(&sendrow, N+3, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD,sendDownRequest);
+		}
 	}
-
+	for(int i=0;rank<lastRank&&i<N;i++)//Nach der Berechnung werden die Daten von Sendrow in die Matrix aufgenommen, zur leichteren Ausgabe
+	{
+		arguments->Matrix[m1][/*letzte Zeile*/rows][i]=sendrow[i];
+	}
 	results->m = m2;
+
+	//TODO es fehlt noch, dass die Sendrow mit in die Ergebnisse integriert wird
+	free(receverow);
+	free(sendrow);
 }
 
 /* ************************************************************************ */
@@ -533,109 +554,8 @@ displayStatistics (struct calculation_arguments const* arguments, struct calcula
 	}
 }
 
-/****************************************************************************/
-/** Beschreibung der Funktion DisplayMatrix:                               **/
-/**                                                                        **/
-/** Die Funktion DisplayMatrix gibt eine Matrix                            **/
-/** in einer "ubersichtlichen Art und Weise auf die Standardausgabe aus.   **/
-/**                                                                        **/
-/** Die "Ubersichtlichkeit wird erreicht, indem nur ein Teil der Matrix    **/
-/** ausgegeben wird. Aus der Matrix werden die Randzeilen/-spalten sowie   **/
-/** sieben Zwischenzeilen ausgegeben.                                      **/
-/****************************************************************************/
-void DisplayMatrix ( char *s, double *v, int interlines , int rank , int size, int from, int to )
-{
-  int x,y;
-  int lines = 8 * interlines + 9;
-  MPI_Status status;
 
-  /* first line belongs to rank 0 */
-  if (rank == 0)
-    from--;
 
-  /* last line belongs to rank size-1 */
-  if (rank + 1 == size)
-    to++;
-
-  if (rank == 0)
-    printf ( "%s\n", s );
-
-  for ( y = 0; y < 9; y++ )
-  {
-    int line = y*(interlines+1);
-
-    if (rank == 0)
-    {
-      /* check whether this line belongs to rank 0 */
-      if (line < from || line > to)
-      {
-        /* use the tag to receive the lines in the correct order
-         * the line is stored in v, because we do not need it anymore */
-        MPI_Recv(v, lines, MPI_DOUBLE, MPI_ANY_SOURCE, 42 + y, MPI_COMM_WORLD, &status);
-      }
-    }
-    else
-    {
-      if (line >= from && line <= to)
-      {
-        /* if the line belongs to this process, send it to rank 0
-         * (line - from + 1) is used to calculate the correct local address */
-        MPI_Send(&v[(line - from + 1)*lines], lines, MPI_DOUBLE, 0, 42 + y, MPI_COMM_WORLD);
-      }
-    }
-
-    for ( x = 0; x < 9; x++ )
-    {
-      if (rank == 0)
-      {
-        if (line >= from && line <= to)
-        {
-          /* this line belongs to rank 0 */
-          printf ( "%7.4f", v[line*lines + x*(interlines+1)]);
-        }
-        else
-        {
-          /* this line belongs to another rank and was received above */
-          printf ( "%7.4f", v[x*(interlines+1)]);
-        }
-      }
-    }
-
-    if (rank == 0)
-      printf ( "\n" );
-  }
-  fflush ( stdout );
-}
-
-static
-void
-DisplayMatrixOld (struct calculation_arguments* arguments, struct calculation_results* results, struct options* options)
-{
-	//TODO DisplayMatrixOld g�nzlich entfernen und Aufruf sinnvoll in Main einbauen.
-	DisplayMatrix("test", arguments->M, options->interlines , arguments->rank , arguments->num_processes, arguments->firstRow, arguments->firstRow+arguments->rows-1);
-	/*if(arguments->rank==2)
-	{
-	int x, y;
-
-	double** Matrix = arguments->Matrix[results->m];
-
-	int const interlines = options->interlines;
-
-	printf("Matrix:\n");
-
-	for (y = 0; y < 9; y++)
-	{
-		for (x = 0; x < 9; x++)
-		{
-			printf ("%7.4f", Matrix[y * (interlines + 1)][x * (interlines + 1)]);
-		}
-
-		printf ("\n");
-	}
-
-	fflush (stdout);
-	}*/
-}
 
 /* ************************************************************************ */
 /*  main                                                                    */
@@ -652,6 +572,8 @@ main (int argc, char** argv)
 	struct options options;
 	struct calculation_arguments arguments;
 	struct calculation_results results;
+	int rank;
+		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	/* get parameters */
 	AskParams(&options, argc, argv);              /* ************************* */
@@ -665,9 +587,9 @@ main (int argc, char** argv)
 	calculate(&arguments, &results, &options);                                      /*  solve the equation  */
 	gettimeofday(&comp_time, NULL);                   /*  stop timer          */
 
-
-	displayStatistics(&arguments, &results, &options);//TODO dies nur von einem Prozess ausführen lassen
-	DisplayMatrixOld(&arguments, &results, &options);//TODO hier möglichst die paralele Version einfügen
+	if(!rank) displayStatistics(&arguments, &results, &options);
+	//DisplayMatrixOld(&arguments, &results, &options);//TODO hier möglichst die paralele Version einfügen
+	DisplayMatrix ( "Matrix: ", &(arguments->M), (options->interlines), (rank) , (arguments->rows), (arguments->firstRow), (arguments->firstRow+arguments->rows));
 
 	freeMatrices(&arguments);                                       /*  free memory     */
 	MPI_Finalize();
