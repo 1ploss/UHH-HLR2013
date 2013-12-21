@@ -1,5 +1,9 @@
-#include <stdio.h>
+
+#include "displaymatrix-mpi.h"
 #include <mpi.h>
+#include <stdlib.h>
+#include <stdio.h>
+
 void DisplayMatrix ( char *s, double *v, int interlines , int rank , int size, int from, int to )
 {
   int x,y;
