@@ -172,9 +172,11 @@ AskParams (struct options* options, int argc, char** argv)
 
 	if (argc < 2)
 	{
+
 		/* ----------------------------------------------- */
 		/* Get input: method, interlines, func, precision. */
 		/* ----------------------------------------------- */
+
 		do
 		{
 			printf("\n");

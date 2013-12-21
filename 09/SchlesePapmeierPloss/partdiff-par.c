@@ -564,6 +564,65 @@ DisplayMatrixOld (struct calculation_arguments* arguments, struct calculation_re
 
 }
 
+/**
+ * parses input and stores it in params.
+ */
+void parse_cmd_line(int argc, char** argv, struct options* options)
+{
+	if (argc < 3)
+	{
+		printf("Arguments error\n");
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	}
+
+
+	if (sscanf(argv[1], "%" SCNu64, &options->number) != 1)
+	{
+		printf("expecting 1st argument of unsigned type, but it hasn't any effect\n");
+		MPI_Abort(MPI_COMM_WORLD, 2);
+	}
+
+	if (sscanf(argv[2], "%" SCNu64, &options->method) != 1||(options->method > 2))
+	{
+		printf("expecting 2nd argument as 1 for Gauss Seidel or 2 for Jacobi\n");
+		MPI_Abort(MPI_COMM_WORLD, 3);
+	}
+
+	if (sscanf(argv[3], "%" SCNu64, &options->interlines) != 1)
+	{
+		printf("expecting 3rd argument of unsigned type\n");
+		MPI_Abort(MPI_COMM_WORLD, 4);
+	}
+
+	if (sscanf(argv[4], "%" SCNu64, &options->inf_func) != 1||(options->inf_func > 2))
+	{
+		printf("expecting 4th argument as 1 for no inference function or 2 for f(x,y) = 2 * pi^2 * sin(pi * x) * sin(pi * y)\n");
+		MPI_Abort(MPI_COMM_WORLD, 5);
+	}
+
+	if ((sscanf(argv[5], "%" SCNu64, &options->termination) != 1) ||
+		(options->termination > 2))
+	{
+		printf("expecting 5th argument as 1for precission or 2 for iteration\n");
+		MPI_Abort(MPI_COMM_WORLD, 6);
+	}
+	if(options->termination==1)
+	{
+		if (sscanf(argv[6], "%lf", &options->term_precision) != 1)
+		{
+			printf("expecting 6th argument as double\n");
+			MPI_Abort(MPI_COMM_WORLD, 6);
+		}
+	}else
+	{
+		if (sscanf(argv[6], "%" SCNu64, &options->term_iteration) != 1)
+		{
+			printf("expecting 6th argument of unsigned type\n");
+			MPI_Abort(MPI_COMM_WORLD, 4);
+		}
+	}
+}
+
 /* ************************************************************************ */
 /*  main                                                                    */
 /* ************************************************************************ */
@@ -583,10 +642,11 @@ main (int argc, char** argv)
 		MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	/* get parameters */
-	AskParams(&options, argc, argv);              /* ************************* */
+	//AskParams(&options, argc, argv);              /* ************************* */
+	parse_cmd_line(argc, argv, &options);
+
 
 	initVariables(&arguments, &results, &options);           /* ******************************************* */
-
 	allocateMatrices(&arguments);        /*  get and initialize variables and matrices  */
 	initMatrices(&arguments, &options);            /* ******************************************* */
 

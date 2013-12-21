@@ -1,5 +1,5 @@
 # Common definitions
-CC=mpicc
+CC=mpicc -g
 CFLAGS=-std=c99 -Wall -Wextra -O2 -ggdb
 LIBS = -lm
 
