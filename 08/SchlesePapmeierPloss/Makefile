@@ -1,17 +1,17 @@
 CC=mpicc
 CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -lm
 
-partdiff-par.o: partdiff-par.c Makefile
-	$(CC) $(CFLAGS) -c $< -o $@
+%-par: %-par.o gauss.o
+	$(CC) $(CFLAGS) -ggdb $? -o $@
 
-partdiff-par: partdiff-par.o
-	$(CC) $(CFLAGS) -ggdb $< -o $@
-
-partdiff-omp.o: partdiff-omp.c Makefile
+%-omp.o: %-omp.c Makefile
 	$(CC) $(CFLAGS) -fopenmp -c $< -o $@
 	
-partdiff-omp: partdiff-omp.o
-	$(CC) $(CFLAGS)  -fopenmp -ggdb $< -o $@
+%-omp: %-omp.o gauss-omp.o
+	$(CC) $(CFLAGS)  -fopenmp -ggdb $? -o $@
+
+%.o : %.c common.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
 all: partdiff-par partdiff-omp
 

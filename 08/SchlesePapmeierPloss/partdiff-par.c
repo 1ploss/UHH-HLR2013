@@ -8,6 +8,7 @@
 #include <math.h>
 #include <unistd.h>
 #include <assert.h>
+#include "gauss.h"
 #include <mpi.h>
 #ifdef _OPENMP
 # include <omp.h>
@@ -21,12 +22,7 @@
 //#define TEST_VALUES
 
 
-#ifndef PI
-#define PI           3.14159265358979323846
-#endif
-#define TWO_PI_SQUARE (2.0 * PI * PI)
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 
 typedef struct
 {
@@ -38,29 +34,10 @@ typedef struct
 	int		 show_next_chunk_line;
 } Display_Params;
 
-typedef struct
-{
-	unsigned use_stoerfunktion;
-	unsigned target_iteration;
-	double target_residuum;
-	int rank;
-	int num_tasks;
-	unsigned interlines;
-	unsigned row_len;
-	unsigned first_row;
-	unsigned num_rows;
-
-	unsigned omp_num_threads;
-
-	unsigned num_chunks;
-	double* mem_pool;
-	double*** chunk;
-} Params;
-
 /**
  * Initializes part of a matrix, that is defined by params->first_line to params->first_row + params->num_rows.
  */
-void init_chunk(double** chunk, const Params* params)
+static void init_chunk(double** chunk, const Params* params)
 {
 //#define LOG_INIT(...) fprintf(stderr, "%i: init: " __VA_ARGS__);
 #define LOG_INIT(...)
@@ -112,8 +89,6 @@ void init_chunk(double** chunk, const Params* params)
 
 #else
 	const unsigned row_len = params->row_len;
-	const int rank = params->rank;
-	const int num_tasks = params->num_tasks;
 	assert(row_len > 0);
 
 	double h = 1.0 / (double) row_len;
@@ -133,7 +108,7 @@ void init_chunk(double** chunk, const Params* params)
 			chunk[y][row_len - 1] = h * y;
 		}
 
-		if (rank == 0)
+		if (is_first_rank(params))
 		{
 			/* initialize top row */
 			for (unsigned x = 0; x < row_len; x++)
@@ -143,7 +118,7 @@ void init_chunk(double** chunk, const Params* params)
 			}
 			chunk[0][row_len - 1] = 0.0;
 		}
-		else if (rank == num_tasks - 1)
+		else if (is_last_rank(params))
 		{
 			/* initialize bottom row */
 			for (unsigned x = 0; x < row_len; x++)
@@ -157,7 +132,7 @@ void init_chunk(double** chunk, const Params* params)
 #endif
 }
 
-double compute(double** const src, double** dest, const Params* params)
+double compute(double** const src, double** dest, const Params* params, unsigned first_row, unsigned num_rows)
 {
 	double maxresiduum = 0;
 	const double h = 1.0 / (double)params->row_len;
@@ -170,7 +145,7 @@ double compute(double** const src, double** dest, const Params* params)
 
 	/* over all rows */
 	#pragma omp parallel for
-	for (unsigned y = 1; y < params->num_rows - 1; y++)
+	for (unsigned y = first_row; y < num_rows; y++)
 	{
 		double fpisin_i = 0.0;
 		LOG_COMP("calculating row %u\n", rank, y);
@@ -193,12 +168,10 @@ double compute(double** const src, double** dest, const Params* params)
 
 			//if (options->termination == TERM_PREC || term_iteration == 1)
 			{
-				double residuum = src[y][x] - star;
-				residuum = (residuum < 0) ? -residuum : residuum;
-
+				double residuum = fabs(src[y][x] - star);
 				#pragma omp critical
 				{
-					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
+					maxresiduum = MAX(residuum, maxresiduum);
 				}
 			}
 			dest[y][x] = star;
@@ -208,9 +181,7 @@ double compute(double** const src, double** dest, const Params* params)
 }
 
 
-#define TAG_COMM_UP 1
-#define TAG_COMM_DOWN 2
-void communicate_jacobi(double** current, const Params* params)
+void communicate_jacobi(double** chunk, const Params* params)
 {
 //#define LOG_COMM(...) fprintf(stderr, "%i: comm: " __VA_ARGS__);
 #define LOG_COMM(...)
@@ -234,8 +205,8 @@ void communicate_jacobi(double** current, const Params* params)
 	 */
 	if (rank != 0) /* 0th rank doesn't send or receive anything above */
 	{
-		MPI_Isend(current[1],                     row_length, MPI_DOUBLE, prev_rank, TAG_COMM_UP, MPI_COMM_WORLD,   &top_request[0]);
-		MPI_Irecv(current[0],                     row_length, MPI_DOUBLE, prev_rank, TAG_COMM_DOWN, MPI_COMM_WORLD, &bottom_request[0]);
+		MPI_Isend(chunk[1],                     row_length, MPI_DOUBLE, prev_rank, TAG_COMM_ROW_UP, MPI_COMM_WORLD,   &top_request[0]);
+		MPI_Irecv(chunk[0],                     row_length, MPI_DOUBLE, prev_rank, TAG_COMM_ROW_DOWN, MPI_COMM_WORLD, &bottom_request[0]);
 	}
 
 	/*
@@ -244,8 +215,8 @@ void communicate_jacobi(double** current, const Params* params)
 	 */
 	if (rank != num_tasks - 1) /* last rank doesn't send or receive anything from below */
 	{
-		 MPI_Isend(current[params->num_rows - 2], row_length, MPI_DOUBLE, next_rank, TAG_COMM_DOWN, MPI_COMM_WORLD, &bottom_request[1]);
-		 MPI_Irecv(current[params->num_rows - 1], row_length, MPI_DOUBLE, next_rank, TAG_COMM_UP, MPI_COMM_WORLD,   &top_request[1]);
+		 MPI_Isend(chunk[params->num_rows - 2], row_length, MPI_DOUBLE, next_rank, TAG_COMM_ROW_DOWN, MPI_COMM_WORLD, &bottom_request[1]);
+		 MPI_Irecv(chunk[params->num_rows - 1], row_length, MPI_DOUBLE, next_rank, TAG_COMM_ROW_UP, MPI_COMM_WORLD,   &top_request[1]);
 	}
 
 	/**
@@ -303,10 +274,7 @@ void calculate_row_offsets(Params* params)
 	//LOG("%u: first row: %u, num_rows: %u\n", params->rank, params->first_row, params->num_rows);
 }
 
-/* ************************************************************************ */
-/* allocateMemory ()                                                        */
-/* allocates memory and quits if there was a memory allocation problem      */
-/* ************************************************************************ */
+
 static void* allocate_memory (size_t size)
 {
 	void * mem = malloc(size);
@@ -346,7 +314,7 @@ void clean_up(Params* params)
 }
 
 
-void display(double** chunk, const Params* params, Display_Params* dp, double max_residuum, unsigned num_iterations)
+void display(const Params* params, const Result* result, const Display_Params* dp)
 {
 	//#define LOG_DISP(...) fprintf(stderr, "%i: disp: " __VA_ARGS__);
 	#define LOG_DISP(...)
@@ -357,7 +325,7 @@ void display(double** chunk, const Params* params, Display_Params* dp, double ma
 	{
 		unsigned rank0_last_row = params->first_row + params->num_rows - 1;
 		LOG_DISP("rank0_last_row %u\n", rank, rank0_last_row);
-		double* row = chunk[0]; // first row to display. also reuse to receive next row
+		double* row = result->chunk[0]; // first row to display. also reuse to receive next row
 		int last_source = 0;
 		for (unsigned row_index = dp->y0; row_index < dp->y1; row_index += dp->advance)
 		{
@@ -368,7 +336,7 @@ void display(double** chunk, const Params* params, Display_Params* dp, double ma
 			if (row_index <= rank0_last_row)
 			{
 				LOG_DISP("using our row %u\n", rank, row_index);
-				row = chunk[row_index];
+				row = result->chunk[row_index];
 			}
 			else
 			{
@@ -388,7 +356,7 @@ void display(double** chunk, const Params* params, Display_Params* dp, double ma
 			}
 			fprintf(out, "\n");
 		}
-		fprintf(out, "max residuum is: %lf, number of iterations done: %u\n", max_residuum, num_iterations);
+		fprintf(out, "max residuum is: %lf, number of iterations done: %lu\n", result->max_residuum, result->num_iterations);
 	}
 	else
 	{
@@ -409,7 +377,7 @@ void display(double** chunk, const Params* params, Display_Params* dp, double ma
 			{
 				const unsigned local_index = row_index - params->first_row;
 				LOG_DISP("sending row %u\n", rank, row_index);
-				MPI_Send(chunk[local_index], params->row_len, MPI_DOUBLE, 0, row_index, MPI_COMM_WORLD);
+				MPI_Send(result->chunk[local_index], params->row_len, MPI_DOUBLE, 0, row_index, MPI_COMM_WORLD);
 			}
 		}
 	}
@@ -421,7 +389,7 @@ void print_params(const Params* params)
 	printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
 	printf("%i: use_stoerfunktion : %i\n", params->rank, params->use_stoerfunktion);
 	printf("%i: target_residuum : %lf\n", params->rank, params->target_residuum);
-	printf("%i: target_iteration : %u\n", params->rank, params->target_iteration);
+	printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
 	printf("%i: interlines : %u\n", params->rank, params->interlines);
 	printf("%i: row_len: %u\n", params->rank, params->row_len);
 	printf("%i: first_row : %u\n", params->rank, params->first_row);
@@ -433,50 +401,72 @@ void print_params(const Params* params)
 
 }
 
+const char* usage = "usage: patdiff-par method interlines use_stoerfunc num_iterations target_residuum\n";
+
 /**
  * parses input and stores it in params.
  */
-void parse_cmd_line(int argc, char** argv, Params* params)
+void params_init(int argc, char** argv, Params* params)
 {
-	if (argc < 3)
+	MPI_Comm_rank(MPI_COMM_WORLD, &params->rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &params->num_tasks);
+	params->next_rank = (params->rank == params->num_tasks - 1) ? 0 : params->rank + 1;
+	params->prev_rank = (params->rank == 0) ? params->num_tasks - 1 : params->rank - 1;
+	params->first_row = 0;
+	params->num_rows = 0;
+
+	if (argc < 4)
 	{
-		printf("Arguments error\n");
+		printf("arguments error\n%s", usage);
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	if (sscanf(argv[1], "%u", &params->interlines) != 1)
+	if ((sscanf(argv[1], "%u", &params->method) != 1) ||
+		(params->method > 1))
 	{
-		printf("expecting 1st argument of unsigned type\n");
+		printf("expecting 1nd argument of boolean type (0 or 1)\n");
 		MPI_Abort(MPI_COMM_WORLD, 2);
+	}
+
+	if (sscanf(argv[2], "%u", &params->interlines) != 1)
+	{
+		printf("expecting 2st argument of unsigned type\n");
+		MPI_Abort(MPI_COMM_WORLD, 3);
 	}
 	params->row_len = (params->interlines * 8) + 9;
 
-	if ((sscanf(argv[2], "%u", &params->use_stoerfunktion) != 1) ||
+	if ((sscanf(argv[3], "%u", &params->use_stoerfunktion) != 1) ||
 		(params->use_stoerfunktion > 1))
 	{
-		printf("expecting 2nd argument of boolean type (0 or 1)\n");
-		MPI_Abort(MPI_COMM_WORLD, 3);
+		printf("expecting 3rd argument of boolean type (0 or 1)\n");
+		MPI_Abort(MPI_COMM_WORLD, 4);
 	}
 
-	if (sscanf(argv[3], "%u", &params->target_iteration) != 1)
+	if (sscanf(argv[4], "%lu", &params->target_iteration) != 1)
 	{
-		printf("expecting 3nd argument of unsigned type\n");
-		MPI_Abort(MPI_COMM_WORLD, 4);
+		printf("expecting 4th argument of 64 bit unsigned type\n");
+		MPI_Abort(MPI_COMM_WORLD, 5);
 	}
 
 	unsigned stop_after_precision_reached = (params->target_iteration == 0);
 	if (stop_after_precision_reached)
 	{
-		if (argc < 4)
+		if (argc < 5)
 		{
-			printf("expecting max residuum as a 4rth argument\n");
-			MPI_Abort(MPI_COMM_WORLD, 5);
+			printf("expecting max residuum as a 5th argument\n");
+			MPI_Abort(MPI_COMM_WORLD, 6);
 		}
 
-		if (sscanf(argv[4], "%lf", &params->target_residuum) != 1)
+		if (sscanf(argv[5], "%lf", &params->target_residuum) != 1)
 		{
-			printf("max residuum should be a double\n");
-			MPI_Abort(MPI_COMM_WORLD, 6);
+			printf("max residuum should be a floating point number\n");
+			MPI_Abort(MPI_COMM_WORLD, 7);
+		}
+
+		if (!isnormal(params->target_residuum) || params->target_residuum <= 0)
+		{
+			printf("max residuum should be a positive floating point number\n");
+			MPI_Abort(MPI_COMM_WORLD, 7);
 		}
 	}
 
@@ -485,7 +475,52 @@ void parse_cmd_line(int argc, char** argv, Params* params)
 #else
 	params->omp_num_threads = 0;
 #endif
+	params->num_chunks = 1 + (params->method == JACOBI);
 }
+
+
+
+void do_jacobi(const Params* params, Result* result)
+{
+//#define LOG_JACOBI(...) fprintf(stderr, "%i: jacobi: " __VA_ARGS__);
+#define LOG_JACOBI(...)
+	unsigned stop_after_precision_reached = (params->target_iteration == 0);
+	unsigned curr = 0;
+	unsigned next = (curr + 1) % params->num_chunks;
+	for (result->num_iterations = 0;; result->num_iterations++)
+	{
+		LOG_JACOBI("iter: %u\n", params->rank, result->num_iterations);
+		double max_residuum = compute(params->chunk[curr], params->chunk[next], params, 1, params->num_rows - 1);
+		communicate_jacobi(params->chunk[next], params);
+		if (stop_after_precision_reached)
+		{
+			/* all tasks need max residuum */
+			MPI_Allreduce(&max_residuum, &result->max_residuum, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+			if (result->max_residuum <= params->target_residuum)
+			{
+				break;
+			}
+		}
+		else if (result->num_iterations >= params->target_iteration)
+		{
+			/* only rank 0 needs max residuum */
+			MPI_Reduce(&max_residuum, &result->max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+			break;
+		}
+		curr = next;
+		next = (next + 1) % params->num_chunks;
+
+		if (params->rank == 0)
+		{
+			LOG_JACOBI("target_res: %lf, max_res: %lf\n", params->rank, params->target_residuum, result->max_residuum);
+		}
+	}
+	result->chunk = params->chunk[next];
+}
+
+
+
+
 
 /**
  * Benutzung:
@@ -505,16 +540,12 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 	Params params;
-	params.num_chunks = 2;
-	MPI_Comm_rank(MPI_COMM_WORLD, &params.rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &params.num_tasks);
-
-	parse_cmd_line(argc, argv, &params);
+	params_init(argc, argv, &params);
 	calculate_row_offsets(&params);
 
 	//print_params(&params);
 	//MPI_Barrier(MPI_COMM_WORLD);
-	unsigned stop_after_precision_reached = (params.target_iteration == 0);
+
 
 
 	allocate_matrix_chunks(&params);
@@ -523,31 +554,14 @@ int main(int argc, char** argv)
 		init_chunk(params.chunk[i], &params);
 	}
 
-	double reduced_max_residuum;
-	unsigned curr = 0;
-	unsigned next = (curr + 1) % params.num_chunks;
-	unsigned iter = 0;
-	for (;; iter++)
+	Result result;
+	if (params.method == JACOBI)
 	{
-		communicate_jacobi(params.chunk[curr], &params);
-		double max_residuum = compute(params.chunk[curr], params.chunk[next], &params);
-		if (stop_after_precision_reached)
-		{
-			/* all prozesses need max residuum */
-			MPI_Allreduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-			if (reduced_max_residuum < params.target_residuum)
-			{
-				break;
-			}
-		}
-		else if (iter >= params.target_iteration)
-		{
-			/* only rank 0 needs max residuum */
-			MPI_Reduce(&max_residuum, &reduced_max_residuum, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-			break;
-		}
-		curr = next;
-		next = (next + 1) % params.num_chunks;
+		do_jacobi(&params, &result);
+	}
+	else
+	{
+		do_gauss(&params, &result);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -557,10 +571,10 @@ int main(int argc, char** argv)
 	usleep(500);
 
 	// show full matrix
-	// Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
+	//Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
 
 	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
-	display(params.chunk[curr], &params, &dp, reduced_max_residuum, iter);
+	display(&params, &result, &dp);
 
 #ifdef SHOW_FIRST2_LINES
 	MPI_Barrier(MPI_COMM_WORLD);
