@@ -107,11 +107,11 @@ initVariables (struct calculation_arguments* arguments, struct calculation_resul
 	arguments->rows = numLines;
 	arguments->rank = rank;
 	arguments->num_processes = num_tasks;
-	/* Diese Berechnung für die firstRow und rows an ein paar kleinen Beispielen getestet. Scheint zu funktionieren.
+	/*// Diese Berechnung für die firstRow und rows an ein paar kleinen Beispielen getestet. Scheint zu funktionieren.
 	printf("num_lines: %d \n", numLines);
 	printf("FirstRow: %d\n",arguments->firstRow);
-	printf("rows: %d\n",arguments->rows);
-	*/
+	printf("rows: %d\n",arguments->rows);*/
+
 
 	results->m = 0;
 	results->stat_iteration = 0;
@@ -317,8 +317,9 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 	int const firstrow = arguments->firstRow;
 	int const lastRank = arguments->num_processes-1;
 	int const firstRank = 0;
-	MPI_Request sendRequest, recvRequest;
+	MPI_Request sendRequest, recvRequest, precrecvRequest;
 	MPI_Status status;
+	int stopflag = 0;
 
 	double pih = 0.0;
 	double fpisin = 0.0;
@@ -344,22 +345,43 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		fpisin = 0.25 * TWO_PI_SQUARE * h * h;
 	}
 
+	if(rank<lastRank)
+	{
+		MPI_Irecv(&stopflag,1,MPI_INT,lastRank,42,MPI_COMM_WORLD, &precrecvRequest);
+	}
+
 	while (term_iteration > 0)
 	{
 		double** Matrix_Out = arguments->Matrix[m1];
 		double** Matrix_In  = arguments->Matrix[m2];
 
-		maxresiduum = 0;
+		if(rank==0)
+		{
+			maxresiduum = 0;
+		}
+
+		if(stopflag == 1)
+		{
+			//printf("Wird stopflag == 1 erreicht? Rank %d\n",rank);
+			term_iteration = 0;
+			stopflag = 2;
+		}
 
 		//Bisher nur für Gauss-Seidel geschrieben. Sollte noch ne Berechnungsmethodenabfrage bekommen
 		//Ist das hier so richtig, dass es nur 1 mal pro Iteration ausgeführt wird?
 		if(rank>firstRank)
 		{
+			//printf("Aber einer steckt in Zeile 373 Rank %d\n",rank);
 			MPI_Recv(Matrix_Out[0],N+3,MPI_DOUBLE, rank-1,0,MPI_COMM_WORLD, &status); //Tags nur sehr provisorisch verwendet zum Testen
+			if(options->termination == TERM_PREC || term_iteration ==1)
+			{
+				//printf("Aber einer steckt in Zeile 377 Rank %d\n",rank);
+				MPI_Recv(&maxresiduum,1,MPI_DOUBLE,rank-1,1,MPI_COMM_WORLD, &status);
+			}
 		}
 		if(!(results->stat_iteration == 0) & (rank<lastRank)) //Erhalten der 1. Zeile des unteren Prozesses kann jederzeit während berechnung geschehen.
 		{
-			MPI_Irecv(Matrix_Out[rows+1],N+3,MPI_DOUBLE, rank+1,1,MPI_COMM_WORLD, &recvRequest);  //Hier Irecv zum Segfault (behoben)
+			MPI_Irecv(Matrix_Out[rows+1],N+3,MPI_DOUBLE, rank+1,2,MPI_COMM_WORLD, &recvRequest);  //Hier Irecv zum Segfault (behoben)
 		}
 
 		/* over all rows */
@@ -368,7 +390,7 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 			double fpisin_i = 0.0;
 			if((rank>firstRank) & (i == 2)) //Im 2 Durchlauf ist die 1. Zeile berechnet und kann nach oben weiter gegeben werden. Muss aber nur 1 Mal gemacht werden
 			{
-				MPI_Isend(Matrix_Out[1],N+3,MPI_DOUBLE, rank-1, 1, MPI_COMM_WORLD, &sendRequest);  //Hier Isend zum Segfault (behoben)
+				MPI_Isend(Matrix_Out[1],N+3,MPI_DOUBLE, rank-1, 2, MPI_COMM_WORLD, &sendRequest);  //Hier Isend zum Segfault (behoben)
 			}
 
 			if (options->inf_func == FUNC_FPISIN)
@@ -377,9 +399,11 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 				fpisin_i = fpisin * sin(pih * (double)globali);    //TODO globali richtig einsetzen (Done) nicht sicher aber wahrscheinlich richtig
 																	//Berechnete Werte waren lokal im Vergleich zur sequentiellen Variante gleich
 			}
-			if((i==rows) & (rank<lastRank) & !(results->stat_iteration == 0)) //Seqfault lag daran, dass &recvRequest erst ab stat_iteration > 0 benutzt wird
+			if((i==rows) & (rank<lastRank) & !(results->stat_iteration == 0) & (stopflag == 0)) //Seqfault lag daran, dass &recvRequest erst ab stat_iteration > 0 benutzt wird
 			{
+				//printf("Rank %d Zeile 403\n",rank);
 				MPI_Wait(&recvRequest, MPI_STATUS_IGNORE);  //Produziert Segfault, wieso?
+				//printf("Rank %d Zeile 405\n",rank);
 			}
 
 			/* over all columns */
@@ -397,16 +421,6 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 					residuum = Matrix_In[i][j] - star;
 					residuum = (residuum < 0) ? -residuum : residuum;
 					maxresiduum = (residuum < maxresiduum) ? maxresiduum : residuum;
-					if(rank>firstRank)
-					{
-					//	maxresiduum = (Matrix_Out[0][N+1] < maxresiduum) ? maxresiduum : Matrix_Out[0][N+1]; //Einbeziehen des erhaltenen maxresiduum des vorherigen Prozess
-					}
-					if((i==rows) & (j==(N-1)))               //Braucht nur einmal am Ende der Iteration geschrieben werden und nur in der letzten Iteration (wenn nach Iterationen abgebrochen wird)
-					{
-					//	Matrix_Out[rows][N+1] = maxresiduum; //Speichert das MaxResiduum in der letzten Zeile und in einer extra Spalte
-															 //Um nur ein Send einer Zeile ausführen zu müssen
-															//TODO maxresiduum kann so nicht einfach mit gesendet werden, da bei der fortlaufenden Adressierung wieder Adresse der nächsten Zeile an Stelle 0 erreicht wird
-					}
 				}
 
 				Matrix_Out[i][j] = star;
@@ -415,7 +429,15 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		//Nach jedem Durchlauf die letzte Zeile nach unten senden
 		if(rank<lastRank)
 		{
+			//printf("Rank %d Zeile 439\n",rank);
 			MPI_Send(Matrix_Out[rows], N+3, MPI_DOUBLE, rank+1, 0, MPI_COMM_WORLD);
+			//printf("Rank %d Zeile 441\n",rank);
+			if(options->termination == TERM_PREC || term_iteration == 1)
+			{
+				//printf("Rank %d Zeile 444\n",rank);
+				MPI_Send(&maxresiduum,1,MPI_DOUBLE,rank+1,1,MPI_COMM_WORLD);
+				//printf("Rank %d Zeile 446\n",rank);
+			}
 		}
 
 		results->stat_iteration++;
@@ -425,19 +447,36 @@ calculate (struct calculation_arguments const* arguments, struct calculation_res
 		i = m1;
 		m1 = m2;
 		m2 = i;
+		//printf("Wird noch im Kreis iteriert? Rank %d\n",rank);
 
 		/* check for stopping calculation, depending on termination method */
 		if (options->termination == TERM_PREC)  //TODO ändern
 		{
-			if (maxresiduum < options->term_precision)
+			if ((rank == lastRank) & (maxresiduum < options->term_precision) & (stopflag == 0))
 			{
-				term_iteration = 0;
+				//printf("Test für iterationen\n");
+				stopflag = 1;
+				for(int r = 0; r < lastRank; r++)
+				{
+					MPI_Send(&stopflag, 1, MPI_INT, r, 42, MPI_COMM_WORLD);
+				}
+				//term_iteration = 0;
 			}
 		}
 		else if (options->termination == TERM_ITER) //Müsste schon so stimmen
 		{
 			term_iteration--;
 		}
+	}
+	//printf("Wird der Teil ausserhalb erreicht? Rank %d\n",rank);
+	if(rank == lastRank)
+	{
+		MPI_Send(&maxresiduum,1,MPI_DOUBLE,firstRank,0,MPI_COMM_WORLD);
+	}
+	if(rank == firstRank)
+	{
+		MPI_Recv(&maxresiduum,1,MPI_DOUBLE,lastRank,0,MPI_COMM_WORLD, &status);
+		results->stat_precision = maxresiduum;
 	}
 
 	results->m = m2;
