@@ -63,8 +63,8 @@ static inline int is_last_rank(const Params* params)
 #endif
 #define TWO_PI_SQUARE (2.0 * PI * PI)
 inline static double min(double a, double b) { return (a < b) ? a : b; }
-inline static double max(double a, double b) { return (a < b) ? a : b; }
+inline static double max(double a, double b) { return (a > b) ? a : b; }
 
 #define TAG_COMM_ROW_UP 1
 #define TAG_COMM_ROW_DOWN 2
-#define TAG_COMM_PASS_MAX_RESIDUUM 3
+#define TAG_COMM_CMD 3

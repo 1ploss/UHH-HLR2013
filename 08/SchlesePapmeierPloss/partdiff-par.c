@@ -581,9 +581,9 @@ int main(int argc, char** argv)
 	usleep(500);
 
 	// show full matrix
-	Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
+	//Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
 
-	//Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
+	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
 	display(&params, &result, &dp);
 
 #ifdef SHOW_FIRST2_LINES
