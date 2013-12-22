@@ -8,5 +8,5 @@
 
 #include "common.h"
 
-void do_gauss(Params* params, Result* result);
+void do_gauss(const Params* params, Result* result);
 

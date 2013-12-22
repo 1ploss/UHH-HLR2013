@@ -171,7 +171,7 @@ double compute(double** const src, double** dest, const Params* params, unsigned
 				double residuum = fabs(src[y][x] - star);
 				#pragma omp critical
 				{
-					maxresiduum = MAX(residuum, maxresiduum);
+					maxresiduum = max(residuum, maxresiduum);
 				}
 			}
 			dest[y][x] = star;
@@ -239,6 +239,7 @@ void communicate_jacobi(double** chunk, const Params* params)
 void calculate_row_offsets(Params* params)
 {
 	assert(params->num_tasks);
+
 	div_t d = div(params->row_len, params->num_tasks);
 	unsigned num_rows = d.quot;
 
@@ -271,7 +272,16 @@ void calculate_row_offsets(Params* params)
 
 	params->first_row = first_row;
 	params->num_rows = num_rows;
-	//LOG("%u: first row: %u, num_rows: %u\n", params->rank, params->first_row, params->num_rows);
+
+	LOG("%u: first row: %u, num_rows: %u\n", params->rank, params->first_row, params->num_rows);
+
+	if (params->num_rows < 4)
+	{
+		MPI_Barrier(MPI_COMM_WORLD); // so the error will be not too hight above
+		fprintf(stderr, "set more interlines or less mpi processese, because matrix row distribution is too uneven.\n"
+						"this limitation is fixable, and is currently keept that way at the moment to simplify the programm.\n");
+		MPI_Abort(MPI_COMM_WORLD, 10);
+	}
 }
 
 
@@ -365,7 +375,7 @@ void display(const Params* params, const Result* result, const Display_Params* d
 		{
 			begin++;
 		}
-		const unsigned end = MIN(dp->y1, (params->first_row + params->num_rows));
+		const unsigned end = min(dp->y1, (params->first_row + params->num_rows));
 
 		LOG_DISP("begin %u, end %u\n", params->rank, begin, end);
 		for (unsigned row_index = begin; row_index < end; row_index += dp->advance)
@@ -543,8 +553,8 @@ int main(int argc, char** argv)
 	params_init(argc, argv, &params);
 	calculate_row_offsets(&params);
 
-	//print_params(&params);
-	//MPI_Barrier(MPI_COMM_WORLD);
+	print_params(&params);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 
 
@@ -571,9 +581,9 @@ int main(int argc, char** argv)
 	usleep(500);
 
 	// show full matrix
-	//Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
+	Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
 
-	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
+	//Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
 	display(&params, &result, &dp);
 
 #ifdef SHOW_FIRST2_LINES
