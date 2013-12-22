@@ -6,20 +6,20 @@ CFLAGS = -std=c99 -pedantic -Wall -Wextra -Wno-unknown-pragmas -O0 -ggdb
 LFLAGS = $(CFLAGS)
 LIBS   = -lm
 
-OBJS = partdiff-seq.o askparams.o
+OBJS = askparams.o partdiff-par.o
 
 # Rule to create *.o from *.c
 .c.o:
 	$(CC) -c $(CFLAGS) $*.c
 
 # Targets ...
-all: partdiff-seq
+all: partdiff-par
 
-partdiff-seq: $(OBJS) Makefile
+partdiff-par: $(OBJS) Makefile
 	$(CC) $(LFLAGS) -o $@ $(OBJS) $(LIBS)
 
 clean:
-	$(RM) *.o *~ partdiff-seq.exe
+	$(RM) *.o *~ partdiff-par.exe
 
 partdiff-seq.o: partdiff-seq.c Makefile
 
