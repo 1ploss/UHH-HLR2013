@@ -190,7 +190,8 @@ static inline void gauss_sync_send_2nd_to_last_row(Row_Comm* rc)
 	rc->second2last_row_posted = 0;
 }
 
-#define LOG_CMD(...) fprintf(stderr, __VA_ARGS__);
+//#define LOG_CMD(...) fprintf(stderr, __VA_ARGS__);
+#define LOG_CMD(...) (void)params;
 static inline void gauss_post_send_cmd(Cmd* cmd, const Params* params, Row_Comm* rc)
 {
 	LOG_CMD("%i:?: post_send_cmd to %i\n", params->rank, params->next_rank);
@@ -230,6 +231,8 @@ static inline void gauss_sync_recv_cmd(const Params* params, Row_Comm* rc)
 
 double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc)
 {
+//#define LOG_CALC(...) fprintf(stderr, __VA_ARGS__);
+#define LOG_CALC(...)
 	unsigned curr_row = 1;
 	double max_residuum = 0;
 
@@ -238,17 +241,17 @@ double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc)
 		gauss_sync_recv_0th_row(rc);
 		gauss_sync_send_1st_row(rc);
 
-		LOG_REQ("%i: calc bottom %u, +1 rows\n", params->rank, curr_row);
+		LOG_CALC("%i: calc top %u, +1 rows\n", params->rank, curr_row);
 		max_residuum = max(compute(chunk, chunk, params, curr_row++, 1), max_residuum);
 
 		gauss_post_send_1st_row(chunk, params, rc); // send out 1st row
 		gauss_post_recv_0th_row(chunk, params, rc); // speculatively post receive next 0th row
 	}
 
-	unsigned num_middle_rows = params->num_rows - curr_row - (2 * !is_last_rank(params));
+	unsigned num_middle_rows = params->num_rows - curr_row - 1 - !is_last_rank(params);
 	if (num_middle_rows < params->num_rows)
 	{
-		LOG_REQ("%i: calc mid %u, +%u rows\n", params->rank, curr_row, num_middle_rows);
+		LOG_CALC("%i: calc mid %u, +%u rows\n", params->rank, curr_row, num_middle_rows);
 		max_residuum = max(compute(chunk, chunk, params, curr_row, num_middle_rows), max_residuum); // do the middle part
 		curr_row += num_middle_rows;
 	}
@@ -258,10 +261,11 @@ double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc)
 	{
 		gauss_sync_recv_last_row(rc); // ensure the las post was received
 		gauss_sync_send_2nd_to_last_row(rc); // ensure the last post succeded
+
 		//LOG_REQ("%i: curr_row: %u, params->num_rows - 2: %u\n", params->rank, curr_row, params->num_rows - 2);
 		assert(curr_row == params->num_rows - 2);
 
-		LOG_REQ("%i: calc bottom %u, +1 rows\n", params->rank, curr_row);
+		LOG_CALC("%i: calc bottom %u, +1 rows\n", params->rank, curr_row);
 		max_residuum = max(compute(chunk, chunk, params, curr_row++, 1),max_residuum); // do the second to last row
 
 		gauss_post_recv_last_row(chunk, params, rc); // speculatively post receive next last row

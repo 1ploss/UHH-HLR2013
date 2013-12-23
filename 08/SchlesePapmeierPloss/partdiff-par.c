@@ -104,8 +104,9 @@ static void init_chunk(double** chunk, const Params* params)
 		/* Initialize first and last element of a matrix row */
 		for (unsigned y = 0; y < params->num_rows; y++)
 		{
-			chunk[y][0] = 1.0 - (h * y);
-			chunk[y][row_len - 1] = h * y;
+			unsigned world_y = params->first_row + y;
+			chunk[y][0] = 1.0 - (h * world_y);
+			chunk[y][row_len - 1] = h * world_y;
 		}
 
 		if (is_first_rank(params))
@@ -134,25 +135,29 @@ static void init_chunk(double** chunk, const Params* params)
 
 double compute(double** const src, double** dest, const Params* params, unsigned first_row, unsigned num_rows)
 {
-	double maxresiduum = 0;
+	//#define LOG_COMP(...) fprintf(stderr, __VA_ARGS__);
+	#define LOG_COMP(...)
+	double max_residuum = 0;
+	// TODO: move some the following Vars to Params.
 	const double h = 1.0 / (double)params->row_len;
 	const double pih = PI * h;
 	const double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
-	//#define LOG_COMP(...) fprintf(stderr, "%i: comp: " __VA_ARGS__);
-	#define LOG_COMP(...)
 
-	LOG_COMP("computing %u lines [%u:%u]\n", rank, params->num_rows - 2, params->first_row + 1, params->first_row + params->num_rows - 2);
+
+	LOG_COMP("%i:?: comp %u rows [%u:%u] world: [%u:%u]\n", params->rank, num_rows,
+					first_row, first_row + num_rows - 1, params->first_row + first_row, params->first_row + first_row + num_rows - 1);
 
 	/* over all rows */
 	#pragma omp parallel for
-	for (unsigned y = first_row; y < num_rows; y++)
+	for (unsigned y = first_row; y < (first_row + num_rows); y++)
 	{
+		unsigned world_y = params->first_row + y;
 		double fpisin_i = 0.0;
-		LOG_COMP("calculating row %u\n", rank, y);
+		LOG_COMP("%i:?: row %u, world %u\n", params->rank, y, world_y);
 
 		if (params->use_stoerfunktion)
 		{
-			fpisin_i = fpisin * sin(pih * (double)y);
+			fpisin_i = fpisin * sin(pih * (double)world_y);
 		}
 
 		/* over all columns, excluding borders */
@@ -171,13 +176,13 @@ double compute(double** const src, double** dest, const Params* params, unsigned
 				double residuum = fabs(src[y][x] - star);
 				#pragma omp critical
 				{
-					maxresiduum = max(residuum, maxresiduum);
+					max_residuum = max(residuum, max_residuum);
 				}
 			}
 			dest[y][x] = star;
 		}
 	}
-	return maxresiduum;
+	return max_residuum;
 }
 
 
@@ -529,6 +534,34 @@ void do_jacobi(const Params* params, Result* result)
 }
 
 
+void not_politicly_correct_yet_usefull_display_function(const Params* params, const Result* result, const Display_Params* dp)
+{
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	fflush(stdout);
+	fflush(stderr);
+
+	for (unsigned i = 0; i < (unsigned)params->rank; i++)
+	{
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+
+	for (unsigned y = 0; y < params->num_rows; y ++)
+	{
+		fprintf(stdout, "%i: y: %u:%u | ", params->rank, y, params->first_row + y);
+		for (unsigned x = dp->x0; x < dp->x1; x += dp->advance)
+		{
+			fprintf(stdout, "%4.4f ", result->chunk[y][x]);
+		}
+		fprintf(stdout, "\n");
+	}
+	fflush(stdout);
+
+	for (unsigned i = params->rank; i < params->row_len; i++)
+	{
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+}
 
 
 
@@ -586,29 +619,10 @@ int main(int argc, char** argv)
 	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
 	display(&params, &result, &dp);
 
-#ifdef SHOW_FIRST2_LINES
-	MPI_Barrier(MPI_COMM_WORLD);
-
-	fflush(stdout);
-	fflush(stderr);
-	MPI_Barrier(MPI_COMM_WORLD);
-	usleep(200 + 100 * params.rank);
-
-	if (1)
-	{
-		for (unsigned y = 0; y < 2; y ++)
-		{
-			fprintf(stdout, "%i: y: %u | ", params.rank, params.first_row + y);
-			for (unsigned x = dp.x0; x < dp.x1; x += dp.advance)
-			{
-				fprintf(stdout, "%4.4f ", params.chunk[curr][y][x]);
-			}
-			fprintf(stdout, "\n");
-		}
-	}
-	fflush(stdout);
-	fflush(stderr);
+#if 0
+	not_politicly_correct_yet_usefull_display_function(&params, &result, &dp);
 #endif
+
 	clean_up(&params);
 	MPI_Finalize();
 	return EXIT_SUCCESS;
