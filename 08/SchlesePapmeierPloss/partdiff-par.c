@@ -407,18 +407,27 @@ void print_params(const Params* params)
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
-	const char* methods[] = { "jaccobi", "gauss" };
-	printf("%i: method : %s\n", params->rank, methods[params->method]);
-	printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
-	printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
-	printf("%i: use_stoerfunktion : %i\n", params->rank, params->use_stoerfunktion);
-	printf("%i: target_residuum : %lf\n", params->rank, params->target_residuum);
-	printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
-	printf("%i: interlines : %u\n", params->rank, params->interlines);
-	printf("%i: row_len: %u\n", params->rank, params->row_len);
+	if (is_first_rank(params))
+	{
+		const char* methods[] = { "jaccobi", "gauss" };
+		printf("%i: ----[general info]----:\n", params->rank);
+		printf("%i: method : %s\n", params->rank, methods[params->method]);
+		printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
+		printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
+		printf("%i: use_stoerfunktion : %i\n", params->rank, params->use_stoerfunktion);
+		printf("%i: target_residuum : %lf\n", params->rank, params->target_residuum);
+		printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
+		printf("%i: interlines : %u\n", params->rank, params->interlines);
+		printf("%i: row_len: %u\n", params->rank, params->row_len);
+		printf("%i: ----[per-rank info]----:\n", params->rank);
+	}
 	printf("%i: first_row : %u\n", params->rank, params->first_row);
 	printf("%i: num_rows : %u\n", params->rank, params->num_rows);
-	printf("%i: chunks mem usage: : %6.3lf kb\n", params->rank, ((double)(params->num_chunks * params->num_rows * params->row_len * sizeof(double)) / (double)(1024)));
+	double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
+
+	printf("%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
+					((bytes_used > (1024 * 1024)) ? bytes_used / (1024 * 1024) : bytes_used / 1024),
+					((bytes_used > (1024 * 1024)) ? 'm' : 'k'));
 
 #ifdef _OPENMP
 	printf("%i: omp_num_threads : %u\n", params->rank, params->omp_num_threads);
