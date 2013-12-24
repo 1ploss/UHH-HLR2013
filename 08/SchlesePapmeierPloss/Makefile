@@ -16,5 +16,5 @@ CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -lm
 all: partdiff-par partdiff-omp
 
 clean:
-	rm *.o ; rm -f partdiff-par partdiff-omp
+	rm -rf *.o ; rm -f partdiff-par partdiff-omp
 	

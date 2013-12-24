@@ -67,6 +67,7 @@ static inline int is_last_rank(const Params* params)
 inline static double min(double a, double b) { return (a < b) ? a : b; }
 inline static double max(double a, double b) { return (a > b) ? a : b; }
 
-#define TAG_COMM_ROW_UP 1
-#define TAG_COMM_ROW_DOWN 2
-#define TAG_COMM_CMD 3
+#define TAG_COMM_CMD 0
+#define TAG_COMM_ROW_UP (1U << 8)
+#define TAG_COMM_ROW_DOWN (2U << 8)
+

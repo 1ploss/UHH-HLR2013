@@ -102,15 +102,12 @@ static void row_comm_init(const Params* params, Row_Comm* r)
 
 static void row_comm_cleanup(Row_Comm* r)
 {
-	(void)r;
-
 	free(r->send_cmd);
 	free(r->recv_cmd);
 	free(r->cmd_recv_post);
 	free(r->cmd_send_post);
 	free(r->cmd_recv_posted);
 	free(r->cmd_send_posted);
-	// */
 }
 
 unsigned prev_send_nr(Row_Comm* r)
@@ -135,14 +132,14 @@ unsigned next_recv_nr(Row_Comm* r)
 
 
 //#define LOG_REQ(...) fprintf(stderr, __VA_ARGS__);
-#define LOG_REQ(...)
+#define LOG_REQ(...) do { (void)iter; } while (0)
 
 /**
  * This function will post receive request for the 0th row
  */
-static inline void gauss_post_recv_0th_row(double** chunk, const Params* params, Row_Comm* rc)
+static inline void gauss_post_recv_0th_row(double** chunk, uint64_t iter, const Params* params, Row_Comm* rc)
 {
-	LOG_REQ("%i:?: post_recv_0th_row to %i\n", params->rank, params->prev_rank);
+	LOG_REQ("%i:%lu: post_recv_0th_row to %i\n", params->rank, iter, params->prev_rank);
 	assert(rc->zeroth_row_requested == 0);
 	MPI_Irecv(chunk[0], params->row_len, MPI_DOUBLE, params->prev_rank, TAG_COMM_ROW_DOWN, MPI_COMM_WORLD, &rc->zeroth_row_request);
 	rc->zeroth_row_requested = 1;
@@ -151,10 +148,10 @@ static inline void gauss_post_recv_0th_row(double** chunk, const Params* params,
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_recv_0th_row(Row_Comm* rc)
+static inline void gauss_sync_recv_0th_row(Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:?: sync_recv_0th_row\n", params->rank);
+	LOG_REQ("%i:%lu: sync_recv_0th_row\n", params->rank, iter);
 	assert(rc->zeroth_row_requested);
 	MPI_Wait(&rc->zeroth_row_request, &status);
 	rc->zeroth_row_requested = 0;
@@ -163,9 +160,9 @@ static inline void gauss_sync_recv_0th_row(Row_Comm* rc)
 /**
  * This function will post receive request for the last row
  */
-static inline void gauss_post_recv_last_row(double** chunk, const Params* params, Row_Comm* rc)
+static inline void gauss_post_recv_last_row(double** chunk, uint64_t iter, const Params* params, Row_Comm* rc)
 {
-	LOG_REQ("%i:?: post_recv_last_row to %i\n", params->rank, params->next_rank);
+	LOG_REQ("%i:%lu: post_recv_last_row to %i\n", params->rank, iter, params->next_rank);
 	assert(rc->last_row_requested == 0);
 	MPI_Irecv(chunk[params->num_rows - 1], params->row_len, MPI_DOUBLE, params->next_rank, TAG_COMM_ROW_UP, MPI_COMM_WORLD, &rc->last_row_request);
 	rc->last_row_requested = 1;
@@ -174,10 +171,10 @@ static inline void gauss_post_recv_last_row(double** chunk, const Params* params
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_recv_last_row(Row_Comm* rc)
+static inline void gauss_sync_recv_last_row(Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:?: sync_recv_last_row\n", params->rank);
+	LOG_REQ("%i:%lu: sync_recv_last_row\n", params->rank, iter);
 	assert(rc->last_row_requested);
 	MPI_Wait(&rc->last_row_request, &status);
 	rc->last_row_requested = 0;
@@ -186,9 +183,9 @@ static inline void gauss_sync_recv_last_row(Row_Comm* rc)
 /**
  * This function will post sending request for the 1st row
  */
-static inline void gauss_post_send_1st_row(double** chunk, const Params* params, Row_Comm* rc)
+static inline void gauss_post_send_1st_row(double** chunk, uint64_t iter, const Params* params, Row_Comm* rc)
 {
-	LOG_REQ("%i:?: post_send_1th to %i\n", params->rank, params->prev_rank);
+	LOG_REQ("%i:%lu: post_send_1th to %i\n", params->rank, iter, params->prev_rank);
 	assert(rc->first_row_posted == 0);
 	assert(params->num_rows >= 1);
 	MPI_Isend(chunk[1], params->row_len, MPI_DOUBLE, params->prev_rank, TAG_COMM_ROW_UP, MPI_COMM_WORLD, &rc->first_row_post);
@@ -198,10 +195,10 @@ static inline void gauss_post_send_1st_row(double** chunk, const Params* params,
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_send_1st_row(Row_Comm* rc)
+static inline void gauss_sync_send_1st_row(Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:?: sync_send_1st_row\n", params->rank);
+	LOG_REQ("%i:%lu: sync_send_1st_row\n", params->rank, iter);
 	assert(rc->first_row_posted);
 	MPI_Wait(&rc->first_row_post, &status);
 	rc->first_row_posted = 0;
@@ -210,9 +207,9 @@ static inline void gauss_sync_send_1st_row(Row_Comm* rc)
 /**
  * This function will post sending request for the 2nd to last row
  */
-static inline void gauss_post_send_2nd_to_last_row(double** chunk, const Params* params, Row_Comm* rc)
+static inline void gauss_post_send_2nd_to_last_row(double** chunk, uint64_t iter, const Params* params, Row_Comm* rc)
 {
-	LOG_REQ("%i:?: post_send_2nd_to_last to %i\n", params->rank, params->next_rank);
+	LOG_REQ("%i:%lu: post_send_2nd_to_last to %i\n", params->rank, iter, params->next_rank);
 	assert(rc->second2last_row_posted == 0);
 	assert(params->num_rows >= 2);
 	MPI_Isend(chunk[params->num_rows - 2], params->row_len, MPI_DOUBLE, params->next_rank, TAG_COMM_ROW_DOWN, MPI_COMM_WORLD, &rc->second2last_row_post);
@@ -222,24 +219,24 @@ static inline void gauss_post_send_2nd_to_last_row(double** chunk, const Params*
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_send_2nd_to_last_row(Row_Comm* rc)
+static inline void gauss_sync_send_2nd_to_last_row(Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:?: sync_send_2nd_to_last_row\n", params->rank);
+	LOG_REQ("%i:%lu: sync_send_2nd_to_last_row\n", params->rank, iter);
 	assert(rc->second2last_row_posted);
 	MPI_Wait(&rc->second2last_row_post, &status);
 	rc->second2last_row_posted = 0;
 }
 
 //#define LOG_CMD(...) fprintf(stderr, __VA_ARGS__);
-#define LOG_CMD(...) (void)params;
+#define LOG_CMD(...) do { (void)params; (void)iter; } while (0)
 
 /**
  * This function will post sending request for a command
  */
-static inline void gauss_post_send_cmd(const Params* params, Row_Comm* rc)
+static inline void gauss_post_send_cmd(const Params* params, Row_Comm* rc, uint64_t iter)
 {
-	LOG_CMD("%i:?: post_send_cmd to %i\n", params->rank, params->next_rank);
+	LOG_CMD("%i:%lu: post_send_cmd to %i\n", params->rank, iter, params->next_rank);
 	assert(rc->cmd_send_posted[rc->curr_send_nr] == 0);
 	MPI_Isend(&rc->send_cmd[rc->curr_send_nr], sizeof(Cmd), MPI_BYTE, params->next_rank, TAG_COMM_CMD + rc->curr_send_nr, MPI_COMM_WORLD, &rc->cmd_send_post[rc->curr_send_nr]);
 	rc->cmd_send_posted[rc->curr_send_nr] = 1;
@@ -248,10 +245,10 @@ static inline void gauss_post_send_cmd(const Params* params, Row_Comm* rc)
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_send_cmd(const Params* params, Row_Comm* rc)
+static inline void gauss_sync_send_cmd(const Params* params, Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_CMD("%i:?: sync_send_cmd\n", params->rank);
+	LOG_CMD("%i:%lu: sync_send_cmd\n", params->rank, iter);
 	assert(rc->cmd_send_posted[rc->curr_send_nr]);
 	MPI_Wait(&rc->cmd_send_post[rc->curr_send_nr], &status);
 	rc->cmd_send_posted[rc->curr_send_nr] = 0;
@@ -260,9 +257,9 @@ static inline void gauss_sync_send_cmd(const Params* params, Row_Comm* rc)
 /**
  * This function will post receive request for a command
  */
-static inline void gauss_post_recv_cmd(const Params* params, Row_Comm* rc)
+static inline void gauss_post_recv_cmd(const Params* params, Row_Comm* rc, uint64_t iter)
 {
-	LOG_CMD("%i:?: post_recv_cmd from %i\n", params->rank, params->prev_rank);
+	LOG_CMD("%i:%lu: post_recv_cmd from %i\n", params->rank, iter, params->prev_rank);
 	assert(rc->cmd_recv_posted[rc->curr_recv_nr] == 0);
 	MPI_Irecv((uint8_t*)&rc->recv_cmd[rc->curr_recv_nr], sizeof(Cmd), MPI_BYTE, params->prev_rank, TAG_COMM_CMD  + rc->curr_recv_nr, MPI_COMM_WORLD, &rc->cmd_recv_post[rc->curr_recv_nr]);
 	rc->cmd_recv_posted[rc->curr_recv_nr] = 1;
@@ -271,10 +268,10 @@ static inline void gauss_post_recv_cmd(const Params* params, Row_Comm* rc)
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_recv_cmd(const Params* params, Row_Comm* rc)
+static inline void gauss_sync_recv_cmd(const Params* params, Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_CMD("%i:?: sync_recv_cmd from %i\n", params->rank, params->prev_rank);
+	LOG_CMD("%i:%lu: sync_recv_cmd from %i\n", params->rank, iter, params->prev_rank);
 	assert(rc->cmd_recv_posted[rc->curr_recv_nr]);
 	MPI_Wait(&rc->cmd_recv_post[rc->curr_recv_nr], &status);
 	rc->cmd_recv_posted[rc->curr_recv_nr] = 0;
@@ -283,7 +280,7 @@ static inline void gauss_sync_recv_cmd(const Params* params, Row_Comm* rc)
 /**
  * This function combines calculation and communication of the Gauss method.
  */
-static double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc)
+static double gauss_calc_comm(double** chunk, uint64_t iter, const Params* params, Row_Comm* rc)
 {
 //#define LOG_CALC(...) fprintf(stderr, __VA_ARGS__);
 #define LOG_CALC(...)
@@ -294,14 +291,14 @@ static double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc
 	if (!is_first_rank(params))
 	{
 		// ensure last speculative receive and send posts are finished.
-		gauss_sync_recv_0th_row(rc);
-		gauss_sync_send_1st_row(rc);
+		gauss_sync_recv_0th_row(rc, iter);
+		gauss_sync_send_1st_row(rc, iter);
 
 		LOG_CALC("%i: calc top %u, +1 rows\n", params->rank, curr_row);
 		max_residuum = max(compute(chunk, chunk, params, curr_row++, 1), max_residuum); // compute 1st row
 
-		gauss_post_send_1st_row(chunk, params, rc); // send out 1st row
-		gauss_post_recv_0th_row(chunk, params, rc); // speculatively post receive next 0th row
+		gauss_post_send_1st_row(chunk, iter, params, rc); // send out 1st row
+		gauss_post_recv_0th_row(chunk, iter, params, rc); // speculatively post receive next 0th row
 	}
 
 	// the middle doesn't have to be send anywhere, just batch process it.
@@ -317,16 +314,16 @@ static double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc
 	if (!is_last_rank(params))
 	{
 		// ensure last speculative receive and send posts are finished.
-		gauss_sync_recv_last_row(rc);
-		gauss_sync_send_2nd_to_last_row(rc);
+		gauss_sync_recv_last_row(rc, iter);
+		gauss_sync_send_2nd_to_last_row(rc, iter);
 
 		assert(curr_row == params->num_rows - 2 && "curr_row calculation went wrong somewhere before");
 
 		LOG_CALC("%i: calc bottom %u, +1 rows\n", params->rank, curr_row);
 		max_residuum = max(compute(chunk, chunk, params, curr_row++, 1),max_residuum); // compute 2nd to last row
 
-		gauss_post_recv_last_row(chunk, params, rc); // speculatively post receive next last row
-		gauss_post_send_2nd_to_last_row(chunk, params, rc);	// send out recently computed second to last row
+		gauss_post_recv_last_row(chunk, iter, params, rc); // speculatively post receive next last row
+		gauss_post_send_2nd_to_last_row(chunk, iter, params, rc);	// send out recently computed second to last row
 	}
 	return max_residuum;
 }
@@ -343,26 +340,33 @@ static void gauss_initial_post(const Params* params, Row_Comm* rc)
 	double** chunk = params->chunk[0];
 
 	/**
-	 * Initiating command chain. Posting default command to rank 0.
+	 * Initiating command chain. Start num_cmd_buffers semi-parallel
 	 */
+	if (is_last_rank(params))
+	{
+		for (unsigned i = 0; i < rc->num_cmd_buffers; i++)
+		{
+			gauss_post_send_cmd(params, rc, (uint64_t)-1);
+			rc->curr_send_nr = next_send_nr(rc);
+		}
+	}
+
 	for (unsigned i = 0; i < rc->num_cmd_buffers; i++)
 	{
-		gauss_post_send_cmd(params, rc);
-		rc->curr_send_nr = next_send_nr(rc);
-		gauss_post_recv_cmd(params, rc);
+		gauss_post_recv_cmd(params, rc, (uint64_t)-1);
 		rc->curr_recv_nr = next_recv_nr(rc);
 	}
 
 	if (!is_first_rank(params)) /* last rank doesn't have any rank below */
 	{
-		gauss_post_recv_0th_row(chunk, params, rc);
-		gauss_post_send_1st_row(chunk, params, rc);
+		gauss_post_recv_0th_row(chunk, (uint64_t)-1, params, rc);
+		gauss_post_send_1st_row(chunk, (uint64_t)-1, params, rc);
 
 	}
 	if (!is_last_rank(params)) /* last rank doesn't have any rank below */
 	{
-		gauss_post_recv_last_row(chunk, params, rc);
-		gauss_post_send_2nd_to_last_row(chunk, params, rc);
+		gauss_post_recv_last_row(chunk, (uint64_t)-1, params, rc);
+		gauss_post_send_2nd_to_last_row(chunk, (uint64_t)-1, params, rc);
 	}
 }
 
@@ -423,13 +427,17 @@ void do_gauss(const Params* params, Result* result)
 	for (iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
 		//LOG_GAUSS("%i:%lu:-----------------------------------\n", params->rank, iter);
-		gauss_sync_send_cmd(params, &rc);
-		gauss_sync_recv_cmd(params, &rc);
+		if (rc.cmd_send_posted[rc.curr_send_nr])
+		{
+			gauss_sync_send_cmd(params, &rc, iter);
+		}
+
+		gauss_sync_recv_cmd(params, &rc, iter);
 
 		Cmd* recv_cmd = &rc.recv_cmd[rc.curr_recv_nr];
 		Cmd* send_cmd = &rc.send_cmd[rc.curr_send_nr];
 
-		max_residuum = gauss_calc_comm(chunk, params, &rc);
+		max_residuum = gauss_calc_comm(chunk, iter, params, &rc);
 		max_residuum = max(max_residuum, recv_cmd->max_residuum);
 
 		send_cmd->cmd = recv_cmd->cmd;
@@ -439,7 +447,8 @@ void do_gauss(const Params* params, Result* result)
 		{
 			stop_after_precision_reached = 0;
 			// num_cmd_buffers receive latency
-			target_iter = iter + rc.num_cmd_buffers * (params->num_tasks - params->rank);
+			//target_iter = iter + rc.num_cmd_buffers * (params->num_tasks - params->rank);
+			target_iter = iter + (params->num_tasks - params->rank);
 			LOG_GAUSS("%i:%lu: switch to iteration mode new target_iter: %lu\n", params->rank, iter, target_iter);
 		}
 		if (is_last_rank(params))
@@ -464,8 +473,8 @@ void do_gauss(const Params* params, Result* result)
 
 		//LOG_GAUSS("%i:%lu: cmd %u->%u, max_residuum: %lf\n", params->rank, iter, recv_cmd->cmd, send_cmd->cmd, max_residuum);
 
-		gauss_post_send_cmd(params, &rc);
-		gauss_post_recv_cmd(params, &rc);
+		gauss_post_send_cmd(params, &rc, iter);
+		gauss_post_recv_cmd(params, &rc, iter);
 
 		rc.curr_send_nr = next_send_nr(&rc);
 		rc.curr_recv_nr = next_recv_nr(&rc);
