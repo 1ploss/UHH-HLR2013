@@ -23,11 +23,6 @@
  */
 #define CMD_SWITCH_TO_ITER 1
 
-/**
- * This causes all task to switch to iteration mode in the next iteration.
- */
-#define CMD_ASK_STOP 2
-
 
 typedef struct
 {
@@ -40,41 +35,104 @@ typedef struct
  */
 typedef struct
 {
-	MPI_Request cmd_recv_post;
-	MPI_Request cmd_send_post;
+	Cmd* send_cmd;
+	Cmd* recv_cmd;
+	MPI_Request* cmd_recv_post;
+	MPI_Request* cmd_send_post;
+	int*		cmd_recv_posted;
+	int*		cmd_send_posted;
 	MPI_Request zeroth_row_request;
 	MPI_Request first_row_post;
 	MPI_Request last_row_request;
 	MPI_Request second2last_row_post;
 
-	int cmd_recv_posted;
-	int cmd_send_posted;
 	int zeroth_row_requested;
 	int first_row_posted;
 	int last_row_requested;
 	int second2last_row_posted;
 
+	unsigned num_cmd_buffers;
+	unsigned curr_send_nr;
+	unsigned curr_recv_nr;
 } Row_Comm;
 
 /**
  * Initializes Row_Comm.
  */
-void row_comm_init(Row_Comm* r)
+static void row_comm_init(const Params* params, Row_Comm* r)
 {
-	r->cmd_recv_post = MPI_REQUEST_NULL;
-	r->cmd_send_post = MPI_REQUEST_NULL;
+	r->num_cmd_buffers = (unsigned)params->num_tasks;
+	r->curr_send_nr = 0;
+	r->curr_recv_nr = 0;
+	r->send_cmd = malloc(r->num_cmd_buffers * sizeof(Cmd));
+	r->recv_cmd = malloc(r->num_cmd_buffers * sizeof(Cmd));
+	r->cmd_recv_post = malloc(r->num_cmd_buffers * sizeof(MPI_Request));
+	r->cmd_send_post = malloc(r->num_cmd_buffers * sizeof(MPI_Request));
+	r->cmd_recv_posted = malloc(r->num_cmd_buffers * sizeof(int));
+	r->cmd_send_posted = malloc(r->num_cmd_buffers * sizeof(int));
+	if (!(r->cmd_recv_post && r->cmd_recv_posted && r->cmd_send_post && r->cmd_send_posted &&
+		  r->send_cmd && r->recv_cmd))
+	{
+		fprintf(stderr, "malloc failed to allocate memory");
+		MPI_Abort(MPI_COMM_WORLD, 20);
+	}
+
+	for (unsigned i = 0; i < r->num_cmd_buffers; ++i)
+	{
+		r->recv_cmd[i].cmd = CMD_NONE;
+		r->recv_cmd[i].max_residuum = 0;
+		r->send_cmd[i].cmd = CMD_NONE;
+		r->send_cmd[i].max_residuum = 0;
+		r->cmd_recv_post[i] = MPI_REQUEST_NULL;
+		r->cmd_recv_posted[i] = 0;
+		r->cmd_send_post[i] = MPI_REQUEST_NULL;
+		r->cmd_send_posted[i] = 0;
+	}
+
 	r->zeroth_row_request = MPI_REQUEST_NULL;
 	r->first_row_post = MPI_REQUEST_NULL;
 	r->last_row_request = MPI_REQUEST_NULL;
 	r->second2last_row_post = MPI_REQUEST_NULL;
 
-	r->cmd_recv_posted = 0;
-	r->cmd_send_posted = 0;
 	r->zeroth_row_requested = 0;
 	r->first_row_posted = 0;
 	r->last_row_requested = 0;
 	r->second2last_row_posted = 0;
 }
+
+static void row_comm_cleanup(Row_Comm* r)
+{
+	(void)r;
+
+	free(r->send_cmd);
+	free(r->recv_cmd);
+	free(r->cmd_recv_post);
+	free(r->cmd_send_post);
+	free(r->cmd_recv_posted);
+	free(r->cmd_send_posted);
+	// */
+}
+
+unsigned prev_send_nr(Row_Comm* r)
+{
+	return (r->curr_send_nr + r->num_cmd_buffers - 1) % r->num_cmd_buffers;
+}
+
+unsigned next_send_nr(Row_Comm* r)
+{
+	return (r->curr_send_nr + 1) % r->num_cmd_buffers;
+}
+
+unsigned prev_recv_nr(Row_Comm* r)
+{
+	return (r->curr_recv_nr + r->num_cmd_buffers - 1) % r->num_cmd_buffers;
+}
+
+unsigned next_recv_nr(Row_Comm* r)
+{
+	return (r->curr_recv_nr + 1) % r->num_cmd_buffers;
+}
+
 
 //#define LOG_REQ(...) fprintf(stderr, __VA_ARGS__);
 #define LOG_REQ(...)
@@ -179,12 +237,12 @@ static inline void gauss_sync_send_2nd_to_last_row(Row_Comm* rc)
 /**
  * This function will post sending request for a command
  */
-static inline void gauss_post_send_cmd(Cmd* cmd, const Params* params, Row_Comm* rc)
+static inline void gauss_post_send_cmd(const Params* params, Row_Comm* rc)
 {
 	LOG_CMD("%i:?: post_send_cmd to %i\n", params->rank, params->next_rank);
-	assert(rc->cmd_send_posted == 0);
-	MPI_Isend(cmd, sizeof(Cmd), MPI_BYTE, params->next_rank, TAG_COMM_CMD, MPI_COMM_WORLD, &rc->cmd_send_post);
-	rc->cmd_send_posted = 1;
+	assert(rc->cmd_send_posted[rc->curr_send_nr] == 0);
+	MPI_Isend(&rc->send_cmd[rc->curr_send_nr], sizeof(Cmd), MPI_BYTE, params->next_rank, TAG_COMM_CMD + rc->curr_send_nr, MPI_COMM_WORLD, &rc->cmd_send_post[rc->curr_send_nr]);
+	rc->cmd_send_posted[rc->curr_send_nr] = 1;
 }
 
 /**
@@ -194,20 +252,20 @@ static inline void gauss_sync_send_cmd(const Params* params, Row_Comm* rc)
 {
 	MPI_Status status;
 	LOG_CMD("%i:?: sync_send_cmd\n", params->rank);
-	assert(rc->cmd_send_posted);
-	MPI_Wait(&rc->cmd_send_post, &status);
-	rc->cmd_send_posted = 0;
+	assert(rc->cmd_send_posted[rc->curr_send_nr]);
+	MPI_Wait(&rc->cmd_send_post[rc->curr_send_nr], &status);
+	rc->cmd_send_posted[rc->curr_send_nr] = 0;
 }
 
 /**
  * This function will post receive request for a command
  */
-static inline void gauss_post_recv_cmd(Cmd* cmd, const Params* params, Row_Comm* rc)
+static inline void gauss_post_recv_cmd(const Params* params, Row_Comm* rc)
 {
 	LOG_CMD("%i:?: post_recv_cmd from %i\n", params->rank, params->prev_rank);
-	assert(rc->cmd_recv_posted == 0);
-	MPI_Irecv((uint8_t*)cmd, sizeof(Cmd), MPI_BYTE, params->prev_rank, TAG_COMM_CMD, MPI_COMM_WORLD, &rc->cmd_recv_post);
-	rc->cmd_recv_posted = 1;
+	assert(rc->cmd_recv_posted[rc->curr_recv_nr] == 0);
+	MPI_Irecv((uint8_t*)&rc->recv_cmd[rc->curr_recv_nr], sizeof(Cmd), MPI_BYTE, params->prev_rank, TAG_COMM_CMD  + rc->curr_recv_nr, MPI_COMM_WORLD, &rc->cmd_recv_post[rc->curr_recv_nr]);
+	rc->cmd_recv_posted[rc->curr_recv_nr] = 1;
 }
 
 /**
@@ -217,9 +275,9 @@ static inline void gauss_sync_recv_cmd(const Params* params, Row_Comm* rc)
 {
 	MPI_Status status;
 	LOG_CMD("%i:?: sync_recv_cmd from %i\n", params->rank, params->prev_rank);
-	assert(rc->cmd_recv_posted);
-	MPI_Wait(&rc->cmd_recv_post, &status);
-	rc->cmd_recv_posted = 0;
+	assert(rc->cmd_recv_posted[rc->curr_recv_nr]);
+	MPI_Wait(&rc->cmd_recv_post[rc->curr_recv_nr], &status);
+	rc->cmd_recv_posted[rc->curr_recv_nr] = 0;
 }
 
 /**
@@ -283,16 +341,16 @@ static double gauss_calc_comm(double** chunk, const Params* params, Row_Comm* rc
 static void gauss_initial_post(const Params* params, Row_Comm* rc)
 {
 	double** chunk = params->chunk[0];
-	Cmd cmd = { CMD_NONE, 0 };
 
 	/**
 	 * Initiating command chain. Posting default command to rank 0.
 	 */
-	if (is_last_rank(params))
+	for (unsigned i = 0; i < rc->num_cmd_buffers; i++)
 	{
-		LOG_GAUSS("%i:0: jumpstart cmd chain\n", params->rank);
-		MPI_Isend(&cmd, sizeof(Cmd), MPI_BYTE, 0, TAG_COMM_CMD, MPI_COMM_WORLD, &rc->cmd_send_post);
-		rc->cmd_send_posted = 1;
+		gauss_post_send_cmd(params, rc);
+		rc->curr_send_nr = next_send_nr(rc);
+		gauss_post_recv_cmd(params, rc);
+		rc->curr_recv_nr = next_recv_nr(rc);
 	}
 
 	if (!is_first_rank(params)) /* last rank doesn't have any rank below */
@@ -324,10 +382,22 @@ static void gauss_cancel_speculative_posts(const Params* params, Row_Comm* rc)
 		LOG_GAUSS("%i: cancelling last_row_request\n", params->rank);
 		MPI_Cancel(&rc->last_row_request);
 	}
-	if (rc->cmd_send_posted)
+
+	for (unsigned i = 0; i < rc->num_cmd_buffers; i++)
 	{
-		LOG_GAUSS("%i: cancelling max_res_posted\n", params->rank);
-		MPI_Cancel(&rc->cmd_send_post);
+		unsigned send_idx = (rc->curr_send_nr + i) % rc-> num_cmd_buffers;
+		if (rc->cmd_send_posted[send_idx])
+		{
+			LOG_GAUSS("%i: cancelling max_res_posted\n", params->rank);
+			MPI_Cancel(&rc->cmd_send_post[send_idx]);
+		}
+
+		unsigned recv_idx = (rc->curr_recv_nr + i) % rc-> num_cmd_buffers;
+		if (rc->cmd_recv_posted[recv_idx])
+		{
+			LOG_GAUSS("%i: cancelling max_res_posted\n", params->rank);
+			MPI_Cancel(&rc->cmd_recv_post[recv_idx]);
+		}
 	}
 
 	LOG_GAUSS("%i: cancel done\n", params->rank);
@@ -340,69 +410,65 @@ void do_gauss(const Params* params, Result* result)
 {
 	unsigned stop_after_precision_reached = (params->target_iteration == 0);
 	double** chunk = params->chunk[0];
-	Cmd recv_cmd, send_cmd;
 	Row_Comm rc;
-	row_comm_init(&rc);
+	row_comm_init(params, &rc);
 
 	gauss_initial_post(params, &rc);
 
 	LOG_GAUSS("%i:0: main loop\n", params->rank);
 
 	double max_residuum = 0;
+	int switch_to_iter_was_sent = 0;
 	uint64_t target_iter = params->target_iteration, iter = 0;
 	for (iter = 0; stop_after_precision_reached || iter < target_iter; iter++)
 	{
-		LOG_GAUSS("%i:%lu:-----------------------------------\n", params->rank, iter);
-
-		gauss_post_recv_cmd(&recv_cmd, params, &rc);
-		max_residuum = gauss_calc_comm(chunk, params, &rc);
+		//LOG_GAUSS("%i:%lu:-----------------------------------\n", params->rank, iter);
+		gauss_sync_send_cmd(params, &rc);
 		gauss_sync_recv_cmd(params, &rc);
 
-		max_residuum = max(max_residuum, recv_cmd.max_residuum);
+		Cmd* recv_cmd = &rc.recv_cmd[rc.curr_recv_nr];
+		Cmd* send_cmd = &rc.send_cmd[rc.curr_send_nr];
 
-		if (rc.cmd_send_posted)
-		{
-			gauss_sync_send_cmd(params, &rc);
-		}
+		max_residuum = gauss_calc_comm(chunk, params, &rc);
+		max_residuum = max(max_residuum, recv_cmd->max_residuum);
 
-		send_cmd.cmd = recv_cmd.cmd;
-		send_cmd.max_residuum = max_residuum;
+		send_cmd->cmd = recv_cmd->cmd;
+		send_cmd->max_residuum = max_residuum;
 
-		if (recv_cmd.cmd == CMD_SWITCH_TO_ITER)
+		if (recv_cmd->cmd == CMD_SWITCH_TO_ITER)
 		{
 			stop_after_precision_reached = 0;
-			//target_iter = iter + (params->num_tasks - params->rank) ;
-			//target_iter = iter + params->rank + 1;
-			target_iter = iter + params->num_tasks;
+			// num_cmd_buffers receive latency
+			target_iter = iter + rc.num_cmd_buffers * (params->num_tasks - params->rank);
 			LOG_GAUSS("%i:%lu: switch to iteration mode new target_iter: %lu\n", params->rank, iter, target_iter);
 		}
 		if (is_last_rank(params))
 		{
-			send_cmd.max_residuum = 0;
-			switch(recv_cmd.cmd)
+			send_cmd->max_residuum = 0;
+			switch(recv_cmd->cmd)
 			{
 				default:
 				case CMD_NONE:
-					if (stop_after_precision_reached && max_residuum < params->target_residuum)
+					if (stop_after_precision_reached && max_residuum < params->target_residuum && switch_to_iter_was_sent == 0)
 					{
-						send_cmd.cmd = CMD_SWITCH_TO_ITER;
+						send_cmd->cmd = CMD_SWITCH_TO_ITER;
+						switch_to_iter_was_sent = 1;
 					}
 					break;
 
 				case CMD_SWITCH_TO_ITER:
-					send_cmd.cmd = CMD_NONE;
-					break;
-
-				case CMD_ASK_STOP:
-					send_cmd.cmd = CMD_SWITCH_TO_ITER;
+					send_cmd->cmd = CMD_NONE;
 					break;
 			}
 		}
 
-		LOG_GAUSS("%i:%lu: cmd %u->%u, max_residuum: %lf\n",
-						params->rank, iter, recv_cmd.cmd, send_cmd.cmd, max_residuum);
+		//LOG_GAUSS("%i:%lu: cmd %u->%u, max_residuum: %lf\n", params->rank, iter, recv_cmd->cmd, send_cmd->cmd, max_residuum);
 
-		gauss_post_send_cmd(&send_cmd, params, &rc);
+		gauss_post_send_cmd(params, &rc);
+		gauss_post_recv_cmd(params, &rc);
+
+		rc.curr_send_nr = next_send_nr(&rc);
+		rc.curr_recv_nr = next_recv_nr(&rc);
 	}
 
 	result->max_residuum = max_residuum;
@@ -412,11 +478,10 @@ void do_gauss(const Params* params, Result* result)
 
 	LOG_GAUSS("%i: done in %lu iterations, max_residuum: %lf, doing bcast\n", params->rank, iter, result->max_residuum);
 
-	//MPI_Allreduce(&max_residuum, &result->max_residuum, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-
 	// distribute the latest max_residuum
 	MPI_Bcast(&result->max_residuum, 1, MPI_DOUBLE, (params->num_tasks - 1), MPI_COMM_WORLD);
 
 	gauss_cancel_speculative_posts(params, &rc);
+	row_comm_cleanup(&rc);
 }
 

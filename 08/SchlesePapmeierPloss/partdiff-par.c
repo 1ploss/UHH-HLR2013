@@ -106,7 +106,7 @@ static void init_chunk(double** chunk, const Params* params)
 		/* Initialize first and last element of a matrix row */
 		for (unsigned y = 0; y < params->num_rows; y++)
 		{
-			unsigned world_y = params->first_row + y;
+			double world_y = params->first_row + y;
 			chunk[y][0] = 1.0 - (h * world_y);
 			chunk[y][row_len - 1] = h * world_y;
 		}
@@ -581,9 +581,7 @@ int main(int argc, char** argv)
 	#define LOG_MAIN(...) fprintf(stderr, "%i: main: " __VA_ARGS__);
 	//#define LOG_MAIN(...)
 
-
-	int rc = MPI_Init(&argc, &argv);
-	if (rc != MPI_SUCCESS)
+	if (MPI_Init(&argc, &argv) != MPI_SUCCESS)
 	{
 		fprintf(stderr, "MPI_Init failed!\n");
 		exit(EXIT_FAILURE);
@@ -594,8 +592,6 @@ int main(int argc, char** argv)
 
 	print_params(&params);
 	MPI_Barrier(MPI_COMM_WORLD);
-
-
 
 	allocate_matrix_chunks(&params);
 	for (unsigned i = 0; i < params.num_chunks; ++i)
