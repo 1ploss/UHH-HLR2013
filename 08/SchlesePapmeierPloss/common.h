@@ -13,7 +13,7 @@ typedef struct
 	enum
 	{
 		JACOBI = 0,
-		GAUSS
+		GAUSS = 1
 	} method;
 
 	unsigned use_stoerfunktion;

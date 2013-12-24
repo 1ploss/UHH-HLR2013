@@ -8,6 +8,8 @@
 #include <math.h>
 #include <unistd.h>
 #include <assert.h>
+#include <time.h>
+#include <sys/time.h>
 #include "gauss.h"
 #include <mpi.h>
 #ifdef _OPENMP
@@ -333,7 +335,7 @@ void display(const Params* params, const Result* result, const Display_Params* d
 {
 	//#define LOG_DISP(...) fprintf(stderr, "%i: disp: " __VA_ARGS__);
 	#define LOG_DISP(...)
-	FILE * out = stderr;
+	FILE * out = stdout;
 	const int rank = params->rank;
 
 	if (rank == 0)
@@ -504,8 +506,8 @@ void do_jacobi(const Params* params, Result* result)
 	unsigned next = (curr + 1) % params->num_chunks;
 	for (result->num_iterations = 0;; result->num_iterations++)
 	{
-		LOG_JACOBI("iter: %u\n", params->rank, result->num_iterations);
-		double max_residuum = compute(params->chunk[curr], params->chunk[next], params, 1, params->num_rows - 1);
+		LOG_JACOBI("iter: %lu\n", params->rank, result->num_iterations);
+		double max_residuum = compute(params->chunk[curr], params->chunk[next], params, 1, params->num_rows - 2);
 		communicate_jacobi(params->chunk[next], params);
 		if (stop_after_precision_reached)
 		{
@@ -534,30 +536,34 @@ void do_jacobi(const Params* params, Result* result)
 }
 
 
-void not_politicly_correct_yet_usefull_display_function(const Params* params, const Result* result, const Display_Params* dp)
+void alt_display(const Params* params, const Result* result, const Display_Params* dp)
 {
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	fflush(stdout);
 	fflush(stderr);
 
-	for (unsigned i = 0; i < (unsigned)params->rank; i++)
+	for (int i = 0; i < params->rank; i++)
 	{
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
 
-	for (unsigned y = 0; y < params->num_rows; y ++)
+	for (unsigned world_y = dp->y0; world_y < (params->first_row + params->num_rows); world_y += dp->advance)
 	{
-		fprintf(stdout, "%i: y: %u:%u | ", params->rank, y, params->first_row + y);
-		for (unsigned x = dp->x0; x < dp->x1; x += dp->advance)
+		if (world_y > params->first_row && ((world_y + dp->advance - dp->y0) % dp->advance) == 0)
 		{
-			fprintf(stdout, "%4.4f ", result->chunk[y][x]);
+			unsigned y = world_y - params->first_row;
+			fprintf(stdout, "%i: y: %u:%u | ", params->rank, y, params->first_row + y);
+			for (unsigned x = dp->x0; x < dp->x1; x += dp->advance)
+			{
+				fprintf(stdout, "%4.4f ", result->chunk[y][x]);
+			}
+			fprintf(stdout, "\n");
 		}
-		fprintf(stdout, "\n");
 	}
 	fflush(stdout);
 
-	for (unsigned i = params->rank; i < params->row_len; i++)
+	for (int i = params->rank; i < params->num_tasks; i++)
 	{
 		MPI_Barrier(MPI_COMM_WORLD);
 	}
@@ -598,6 +604,8 @@ int main(int argc, char** argv)
 	}
 
 	Result result;
+	struct timeval start_time, end_time;
+	gettimeofday(&start_time, NULL);
 	if (params.method == JACOBI)
 	{
 		do_jacobi(&params, &result);
@@ -608,6 +616,7 @@ int main(int argc, char** argv)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	gettimeofday(&end_time, NULL);
 
 	fflush(stdout);
 	fflush(stderr);
@@ -618,10 +627,16 @@ int main(int argc, char** argv)
 
 	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
 	display(&params, &result, &dp);
+	if (params.rank == 0)
+	{
+		printf("time taken: %lf seconds\n", (double)(end_time.tv_sec - start_time.tv_sec) + (((double)(end_time.tv_usec - start_time.tv_usec) * 1e-6 )));
+	}
 
-#if 0
-	not_politicly_correct_yet_usefull_display_function(&params, &result, &dp);
+#if 1
+	alt_display(&params, &result, &dp);
 #endif
+
+
 
 	clean_up(&params);
 	MPI_Finalize();
