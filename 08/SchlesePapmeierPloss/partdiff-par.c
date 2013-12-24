@@ -402,6 +402,13 @@ void display(const Params* params, const Result* result, const Display_Params* d
 
 void print_params(const Params* params)
 {
+	for (int i = 0; i < params->rank; i++)
+	{
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+
+	const char* methods[] = { "jaccobi", "gauss" };
+	printf("%i: method : %s\n", params->rank, methods[params->method]);
 	printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
 	printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
 	printf("%i: use_stoerfunktion : %i\n", params->rank, params->use_stoerfunktion);
@@ -412,9 +419,17 @@ void print_params(const Params* params)
 	printf("%i: first_row : %u\n", params->rank, params->first_row);
 	printf("%i: num_rows : %u\n", params->rank, params->num_rows);
 	printf("%i: chunks mem usage: : %6.3lf kb\n", params->rank, ((double)(params->num_chunks * params->num_rows * params->row_len * sizeof(double)) / (double)(1024)));
+
 #ifdef _OPENMP
 	printf("%i: omp_num_threads : %u\n", params->rank, params->omp_num_threads);
 #endif
+
+	fflush(stdout);
+	for (int i = params->rank; i < params->num_tasks; i++)
+	{
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
+
 
 }
 
@@ -591,7 +606,6 @@ int main(int argc, char** argv)
 	calculate_row_offsets(&params);
 
 	print_params(&params);
-	MPI_Barrier(MPI_COMM_WORLD);
 
 	allocate_matrix_chunks(&params);
 	for (unsigned i = 0; i < params.num_chunks; ++i)
@@ -611,7 +625,6 @@ int main(int argc, char** argv)
 		do_gauss(&params, &result);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
 	gettimeofday(&end_time, NULL);
 
 	fflush(stdout);
