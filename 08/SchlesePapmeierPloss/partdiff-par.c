@@ -431,35 +431,35 @@ void params_init(int argc, char** argv, Params* params)
 	params->prev_rank = (params->rank == 0) ? params->num_tasks - 1 : params->rank - 1;
 	params->first_row = 0;
 	params->num_rows = 0;
-
+	unsigned pos;
 	if (argc < 4)
 	{
 		printf("arguments error\n%s", usage);
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	if ((sscanf(argv[1], "%u", &params->method) != 1) ||
+	if ((sscanf(argv[1], "%u%n", &params->method, &pos) != 1) || pos != strlen(argv[1]) ||
 		(params->method > 1))
 	{
 		printf("expecting 1nd argument of boolean type (0 or 1)\n");
 		MPI_Abort(MPI_COMM_WORLD, 2);
 	}
 
-	if (sscanf(argv[2], "%u", &params->interlines) != 1)
+	if (sscanf(argv[2], "%u%n", &params->interlines, &pos) != 1 ||  pos != strlen(argv[2]))
 	{
 		printf("expecting 2st argument of unsigned type\n");
 		MPI_Abort(MPI_COMM_WORLD, 3);
 	}
 	params->row_len = (params->interlines * 8) + 9;
 
-	if ((sscanf(argv[3], "%u", &params->use_stoerfunktion) != 1) ||
+	if ((sscanf(argv[3], "%u%n", &params->use_stoerfunktion, &pos) != 1) ||  pos != strlen(argv[3]) ||
 		(params->use_stoerfunktion > 1))
 	{
 		printf("expecting 3rd argument of boolean type (0 or 1)\n");
 		MPI_Abort(MPI_COMM_WORLD, 4);
 	}
 
-	if (sscanf(argv[4], "%lu", &params->target_iteration) != 1)
+	if (sscanf(argv[4], "%lu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[4]))
 	{
 		printf("expecting 4th argument of 64 bit unsigned type\n");
 		MPI_Abort(MPI_COMM_WORLD, 5);
@@ -474,7 +474,7 @@ void params_init(int argc, char** argv, Params* params)
 			MPI_Abort(MPI_COMM_WORLD, 6);
 		}
 
-		if (sscanf(argv[5], "%lf", &params->target_residuum) != 1)
+		if (sscanf(argv[5], "%lf%n", &params->target_residuum, &pos) != 1 ||  pos != strlen(argv[5]))
 		{
 			printf("max residuum should be a floating point number\n");
 			MPI_Abort(MPI_COMM_WORLD, 7);
@@ -627,15 +627,15 @@ int main(int argc, char** argv)
 
 	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
 	display(&params, &result, &dp);
+
+#if 0
+	alt_display(&params, &result, &dp);
+#endif
+
 	if (params.rank == 0)
 	{
 		printf("time taken: %lf seconds\n", (double)(end_time.tv_sec - start_time.tv_sec) + (((double)(end_time.tv_usec - start_time.tv_usec) * 1e-6 )));
 	}
-
-#if 1
-	alt_display(&params, &result, &dp);
-#endif
-
 
 
 	clean_up(&params);
