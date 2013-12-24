@@ -130,9 +130,16 @@ unsigned next_recv_nr(Row_Comm* r)
 	return (r->curr_recv_nr + 1) % r->num_cmd_buffers;
 }
 
+/**
+ * Incorporate part of the iteration number as a part of the tag,
+ * to make it easier to find communication bugs.
+ */
+#define TAG_MASK ((1UL << 16) - 1)
+#define TAG_HASH(dir, iter) (int)((((iter & TAG_MASK) << 9) | dir) & 0x8FFFFFFF)
+//#define TAG_HASH(dir, iter) dir
 
 //#define LOG_REQ(...) fprintf(stderr, __VA_ARGS__);
-#define LOG_REQ(...) do { (void)iter; } while (0)
+#define LOG_REQ(...) do { (void)params; (void)iter; } while (0)
 
 /**
  * This function will post receive request for the 0th row
@@ -141,17 +148,18 @@ static inline void gauss_post_recv_0th_row(double** chunk, uint64_t iter, const 
 {
 	LOG_REQ("%i:%lu: post_recv_0th_row to %i\n", params->rank, iter, params->prev_rank);
 	assert(rc->zeroth_row_requested == 0);
-	MPI_Irecv(chunk[0], params->row_len, MPI_DOUBLE, params->prev_rank, TAG_COMM_ROW_DOWN, MPI_COMM_WORLD, &rc->zeroth_row_request);
+	MPI_Irecv(chunk[0], params->row_len, MPI_DOUBLE, params->prev_rank,
+					TAG_HASH(TAG_COMM_ROW_DOWN, iter), MPI_COMM_WORLD, &rc->zeroth_row_request);
 	rc->zeroth_row_requested = 1;
 }
 
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_recv_0th_row(Row_Comm* rc, uint64_t iter)
+static inline void gauss_sync_recv_0th_row(const Params* params, Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:%lu: sync_recv_0th_row\n", params->rank, iter);
+	LOG_REQ("%i:%lu: sync_recv_0th_row (tag %i)\n", params->rank, iter, TAG_HASH(TAG_COMM_ROW_DOWN, iter));
 	assert(rc->zeroth_row_requested);
 	MPI_Wait(&rc->zeroth_row_request, &status);
 	rc->zeroth_row_requested = 0;
@@ -164,17 +172,18 @@ static inline void gauss_post_recv_last_row(double** chunk, uint64_t iter, const
 {
 	LOG_REQ("%i:%lu: post_recv_last_row to %i\n", params->rank, iter, params->next_rank);
 	assert(rc->last_row_requested == 0);
-	MPI_Irecv(chunk[params->num_rows - 1], params->row_len, MPI_DOUBLE, params->next_rank, TAG_COMM_ROW_UP, MPI_COMM_WORLD, &rc->last_row_request);
+	MPI_Irecv(chunk[params->num_rows - 1], params->row_len, MPI_DOUBLE, params->next_rank,
+					TAG_HASH(TAG_COMM_ROW_UP, iter), MPI_COMM_WORLD, &rc->last_row_request);
 	rc->last_row_requested = 1;
 }
 
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_recv_last_row(Row_Comm* rc, uint64_t iter)
+static inline void gauss_sync_recv_last_row(const Params* params, Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:%lu: sync_recv_last_row\n", params->rank, iter);
+	LOG_REQ("%i:%lu: sync_recv_last_row (tag %i)\n", params->rank, iter, TAG_HASH(TAG_COMM_ROW_UP, iter));
 	assert(rc->last_row_requested);
 	MPI_Wait(&rc->last_row_request, &status);
 	rc->last_row_requested = 0;
@@ -188,17 +197,18 @@ static inline void gauss_post_send_1st_row(double** chunk, uint64_t iter, const 
 	LOG_REQ("%i:%lu: post_send_1th to %i\n", params->rank, iter, params->prev_rank);
 	assert(rc->first_row_posted == 0);
 	assert(params->num_rows >= 1);
-	MPI_Isend(chunk[1], params->row_len, MPI_DOUBLE, params->prev_rank, TAG_COMM_ROW_UP, MPI_COMM_WORLD, &rc->first_row_post);
+	MPI_Isend(chunk[1], params->row_len, MPI_DOUBLE, params->prev_rank,
+					TAG_HASH(TAG_COMM_ROW_UP, iter), MPI_COMM_WORLD, &rc->first_row_post);
 	rc->first_row_posted = 1;
 }
 
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_send_1st_row(Row_Comm* rc, uint64_t iter)
+static inline void gauss_sync_send_1st_row(const Params* params, Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:%lu: sync_send_1st_row\n", params->rank, iter);
+	LOG_REQ("%i:%lu: sync_send_1st_row (tag %i)\n", params->rank, iter, TAG_HASH(TAG_COMM_ROW_UP, iter));
 	assert(rc->first_row_posted);
 	MPI_Wait(&rc->first_row_post, &status);
 	rc->first_row_posted = 0;
@@ -212,17 +222,18 @@ static inline void gauss_post_send_2nd_to_last_row(double** chunk, uint64_t iter
 	LOG_REQ("%i:%lu: post_send_2nd_to_last to %i\n", params->rank, iter, params->next_rank);
 	assert(rc->second2last_row_posted == 0);
 	assert(params->num_rows >= 2);
-	MPI_Isend(chunk[params->num_rows - 2], params->row_len, MPI_DOUBLE, params->next_rank, TAG_COMM_ROW_DOWN, MPI_COMM_WORLD, &rc->second2last_row_post);
+	MPI_Isend(chunk[params->num_rows - 2], params->row_len, MPI_DOUBLE, params->next_rank,
+					TAG_HASH(TAG_COMM_ROW_DOWN, iter), MPI_COMM_WORLD, &rc->second2last_row_post);
 	rc->second2last_row_posted = 1;
 }
 
 /**
  * This function will wait until the post from the previous function is complete.
  */
-static inline void gauss_sync_send_2nd_to_last_row(Row_Comm* rc, uint64_t iter)
+static inline void gauss_sync_send_2nd_to_last_row(const Params* params, Row_Comm* rc, uint64_t iter)
 {
 	MPI_Status status;
-	LOG_REQ("%i:%lu: sync_send_2nd_to_last_row\n", params->rank, iter);
+	LOG_REQ("%i:%lu: sync_send_2nd_to_last_row (tag %i)\n", params->rank, iter, TAG_HASH(TAG_COMM_ROW_DOWN, iter));
 	assert(rc->second2last_row_posted);
 	MPI_Wait(&rc->second2last_row_post, &status);
 	rc->second2last_row_posted = 0;
@@ -291,8 +302,8 @@ static double gauss_calc_comm(double** chunk, uint64_t iter, const Params* param
 	if (!is_first_rank(params))
 	{
 		// ensure last speculative receive and send posts are finished.
-		gauss_sync_recv_0th_row(rc, iter);
-		gauss_sync_send_1st_row(rc, iter);
+		gauss_sync_recv_0th_row(params, rc, iter);
+		gauss_sync_send_1st_row(params, rc, iter);
 
 		LOG_CALC("%i: calc top %u, +1 rows\n", params->rank, curr_row);
 		max_residuum = max(compute(chunk, chunk, params, curr_row++, 1), max_residuum); // compute 1st row
@@ -314,8 +325,8 @@ static double gauss_calc_comm(double** chunk, uint64_t iter, const Params* param
 	if (!is_last_rank(params))
 	{
 		// ensure last speculative receive and send posts are finished.
-		gauss_sync_recv_last_row(rc, iter);
-		gauss_sync_send_2nd_to_last_row(rc, iter);
+		gauss_sync_recv_last_row(params, rc, iter);
+		gauss_sync_send_2nd_to_last_row(params, rc, iter);
 
 		assert(curr_row == params->num_rows - 2 && "curr_row calculation went wrong somewhere before");
 
