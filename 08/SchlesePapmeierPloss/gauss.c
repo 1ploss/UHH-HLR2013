@@ -457,8 +457,12 @@ void do_gauss(const Params* params, Result* result)
 		if (recv_cmd->cmd == CMD_SWITCH_TO_ITER)
 		{
 			stop_after_precision_reached = 0;
-			// num_cmd_buffers receive latency
-			//target_iter = iter + rc.num_cmd_buffers * (params->num_tasks - params->rank);
+			/**
+			 * The processes will finish in the same iteration or recv/send posts would not connect. Since the command latency is
+			 * params->num_tasks, we have to adjust for that. rank0 would have latency 0 and it has to run for (params->num_tasks - 1)
+			 * iterations to finish with at the same time as the last process. The last process would also aggregate max residuum from
+			 * the iter + iteration.
+			 */
 			target_iter = iter + (params->num_tasks - params->rank);
 			LOG_GAUSS("%i:%lu: switch to iteration mode new target_iter: %lu\n", params->rank, iter, target_iter);
 		}

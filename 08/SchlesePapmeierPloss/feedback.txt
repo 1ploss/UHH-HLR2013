@@ -1,0 +1,14 @@
++-------------------+------------------------------------------------------------------+
+| Bearbeitungszeit  |      10+                                                         |
++-------------------+-----------------------+----------------------+-------------------+
+| Schwierigkeit     | [ ] zu leicht         | [ ] genau richtig    | [x] zu schwehr    |
++-------------------+-----------------------+----------------------+-------------------+
+| Lehrreich         | [x] wenig             | [ ] etwas            | [ ] sehr          |
++-------------------+-----------------------+----------------------+-------------------+
+| Verstaendlichkeit | [x] grossteils unklar | [ ] teilweise unklar | [ ] verstaendlich |
++-------------------+-----------------------+----------------------+-------------------+
+| Kommentar         | Wenn man in der übung sagt, dass man kein Bock hat die           |
+| 		    unkommentierte  Aufgaben zu korrigieren und dann unkomentiertes    |
+| DisplayMatrix Code liefert. Es ist ehrlich gesagt zu viel zu Programieren und zu     |
+| debuggen. Die Aufgabe ist eindeutig viel.                                            |
++-------------------+------------------------------------------------------------------+
