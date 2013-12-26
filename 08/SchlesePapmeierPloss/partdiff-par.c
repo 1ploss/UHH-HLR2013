@@ -1,6 +1,7 @@
 #define _BSD_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
+#include <libgen.h>
 #include <stdint.h>
 #include <time.h>
 #include <limits.h>
@@ -140,14 +141,9 @@ double compute(double** const src, double** dest, const Params* params, unsigned
 	//#define LOG_COMP(...) fprintf(stderr, __VA_ARGS__);
 	#define LOG_COMP(...)
 	double max_residuum = 0;
-	// TODO: move some the following Vars to Params.
-	const double h = 1.0 / (double)params->row_len;
-	const double pih = PI * h;
-	const double fpisin = 0.25 * TWO_PI_SQUARE * h * h;//ist das *h*h Absicht?
-
 
 	LOG_COMP("%i:?: comp %u rows [%u:%u] world: [%u:%u]\n", params->rank, num_rows,
-					first_row, first_row + num_rows - 1, params->first_row + first_row, params->first_row + first_row + num_rows - 1);
+			first_row, first_row + num_rows - 1, params->first_row + first_row, params->first_row + first_row + num_rows - 1);
 
 	/* over all rows */
 	#pragma omp parallel for
@@ -159,18 +155,18 @@ double compute(double** const src, double** dest, const Params* params, unsigned
 
 		if (params->use_stoerfunktion)
 		{
-			fpisin_i = fpisin * sin(pih * (double)world_y);
+			fpisin_i = params->fpisin * sin(params->pih * (double)world_y);
 		}
 
 		/* over all columns, excluding borders */
 		for (unsigned x = 1; x < (params->row_len - 1); x++)
 		{
 			double star = 0.25 * (/* left*/ src[y-1][x] + /* right */ src[y+1][x] +
-								  /*bottom*/ src[y][x-1] + /* up */ src[y][x+1]);
+								  /*bottom*/src[y][x-1] + /* up */ src[y][x+1]);
 
 			if (params->use_stoerfunktion)
 			{
-				star += fpisin_i * sin(pih * (double)x);
+				star += fpisin_i * sin(params->pih * (double)x);
 			}
 
 			//if (options->termination == TERM_PREC || term_iteration == 1)
@@ -229,7 +225,6 @@ void communicate_jacobi(double** chunk, const Params* params)
 	/**
 	 * Wait for completion
 	 */
-
 	if (rank != 0)
 	{
 		MPI_Wait(&top_request[0], &status);
@@ -243,6 +238,10 @@ void communicate_jacobi(double** chunk, const Params* params)
 	}
 }
 
+/**
+ * Calculates params->first_row (world y, row number of the whole matrix) and
+ * num_rows (number of rows, the tasks has locally in memory)
+ */
 void calculate_row_offsets(Params* params)
 {
 	assert(params->num_tasks);
@@ -292,6 +291,9 @@ void calculate_row_offsets(Params* params)
 }
 
 
+/**
+ * Like malloc, only checks for result and exits the program on failure.
+ */
 static void* allocate_memory (size_t size)
 {
 	void * mem = malloc(size);
@@ -303,6 +305,9 @@ static void* allocate_memory (size_t size)
 	return mem;
 }
 
+/**
+ * Allocates memory for the matrix part owned by this task.
+ */
 void allocate_matrix_chunks (Params* params)
 {
 	const size_t chunk_size = params->row_len * params->num_rows;
@@ -319,6 +324,9 @@ void allocate_matrix_chunks (Params* params)
 	}
 }
 
+/**
+ * Frees memory allocated with the function above.
+ */
 void clean_up(Params* params)
 {
 	LOG("%d: cleanup\n", params->rank);
@@ -330,7 +338,9 @@ void clean_up(Params* params)
 	free(params->mem_pool);
 }
 
-
+/**
+ * Displays the matrix. Display_Params describe how the displaying is done.
+ */
 void display(const Params* params, const Result* result, const Display_Params* dp)
 {
 	//#define LOG_DISP(...) fprintf(stderr, "%i: disp: " __VA_ARGS__);
@@ -402,14 +412,10 @@ void display(const Params* params, const Result* result, const Display_Params* d
 
 void print_params(const Params* params)
 {
-	for (int i = 0; i < params->rank; i++)
-	{
-		MPI_Barrier(MPI_COMM_WORLD);
-	}
-
+	char buff[1024];
 	if (is_first_rank(params))
 	{
-		const char* methods[] = { "jaccobi", "gauss" };
+		const char* methods[] = { "unknown", "gauss", "jaccobi" };
 		printf("%i: ----[general info]----:\n", params->rank);
 		printf("%i: method : %s\n", params->rank, methods[params->method]);
 		printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
@@ -420,32 +426,46 @@ void print_params(const Params* params)
 		printf("%i: interlines : %u\n", params->rank, params->interlines);
 		printf("%i: row_len: %u\n", params->rank, params->row_len);
 		printf("%i: ----[per-rank info]----:\n", params->rank);
-	}
-	printf("%i: first_row : %u\n", params->rank, params->first_row);
-	printf("%i: num_rows : %u\n", params->rank, params->num_rows);
-	double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
+		printf("%i: first_row : %u\n", params->rank, params->first_row);
+		printf("%i: num_rows : %u\n", params->rank, params->num_rows);
+		double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
 
-	printf("%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
+		printf("%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
 					((bytes_used > (1024 * 1024)) ? bytes_used / (1024 * 1024) : bytes_used / 1024),
 					((bytes_used > (1024 * 1024)) ? 'm' : 'k'));
 
+		MPI_Status status;
+		for (int i = 1; i < params->num_tasks; i++)
+		{
+			for (unsigned j = 0; j < 3; j++)
+			{
+				MPI_Recv(buff, sizeof(buff), MPI_CHAR, i, 0, MPI_COMM_WORLD, &status);
+				printf(buff);
+			}
+		}
 #ifdef _OPENMP
-	printf("%i: omp_num_threads : %u\n", params->rank, params->omp_num_threads);
+	printf("%i: omp_num_threads : %u\n", params->rank, params->num_threads);
 #endif
-
-	fflush(stdout);
-	for (int i = params->rank; i < params->num_tasks; i++)
-	{
-		MPI_Barrier(MPI_COMM_WORLD);
 	}
+	else
+	{
+		snprintf(buff, sizeof(buff), "%i: first_row : %u\n", params->rank, params->first_row);
+		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 
+		snprintf(buff, sizeof(buff), "%i: num_rows : %u\n", params->rank, params->num_rows);
+		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+
+		double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
+		snprintf(buff, sizeof(buff), "%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
+					((bytes_used > (1024 * 1024)) ? bytes_used / (1024 * 1024) : bytes_used / 1024),
+					((bytes_used > (1024 * 1024)) ? 'm' : 'k'));
+		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+	}
 
 }
 
-const char* usage = "usage: patdiff-par method interlines use_stoerfunc num_iterations target_residuum\n";
-
 /**
- * parses input and stores it in params.
+ * Parses input and stores it in params.
  */
 void params_init(int argc, char** argv, Params* params)
 {
@@ -456,49 +476,91 @@ void params_init(int argc, char** argv, Params* params)
 	params->first_row = 0;
 	params->num_rows = 0;
 	unsigned pos;
-	if (argc < 4)
+
+
+	if (argc < 6)
 	{
-		printf("arguments error\n%s", usage);
+		printf("there should be 6 arguments!\n");
+		printf("Usage: partdiff-par [num] [method] [lines] [func] [term] [prec/iter]\n");
+		printf("\n");
+		printf("  - num:       number of threads (1 .. )\n");
+		printf("  - method:    calculation method (1 .. 2)\n");
+		printf("                 1: Gauß-Seidel\n");
+		printf("                 2: Jacobi\n");
+		printf("  - lines:     number of interlines (0 .. depends of how much memory you have)\n");
+		printf("                 matrixsize = (interlines * 8) + 9\n");
+		printf("  - func:      interference function (1 .. 2)\n");
+		printf("                 1: f(x,y) = 0\n");
+		printf("                 2: f(x,y) = 2 * pi^2 * sin(pi * x) * sin(pi * y)\n");
+		printf("  - term:      termination condition ( 1.. 2)\n");
+		printf("                 1: sufficient precision\n");
+		printf("                 2: number of iterations\n");
+		printf("  - prec/iter: depending on term:\n");
+		printf("                 precision:  1e-4 .. 1e-20\n");
+		printf("                 iterations:    1 .. \n");
+		printf("\n");
+		printf("Example: partdiff-par 1 2 100 1 2 100 \n");
 		MPI_Abort(MPI_COMM_WORLD, 1);
 	}
 
-	if ((sscanf(argv[1], "%u%n", &params->method, &pos) != 1) || pos != strlen(argv[1]) ||
-		(params->method > 1))
+	if ((sscanf(argv[1], "%u%n", &params->num_threads, &pos) != 1) || pos != strlen(argv[1]))
 	{
-		printf("expecting 1nd argument of boolean type (0 or 1)\n");
+		printf("first argument should have unsigned type\n");
 		MPI_Abort(MPI_COMM_WORLD, 2);
 	}
 
-	if (sscanf(argv[2], "%u%n", &params->interlines, &pos) != 1 ||  pos != strlen(argv[2]))
+#ifdef _OPENMP
+	if (params->num_threads)
+	{
+		omp_set_dynamic(0);     // Explicitly disable dynamic teams
+		omp_set_num_threads(params->num_threads);
+	}
+#endif
+
+	if ((sscanf(argv[2], "%u%n", &params->method, &pos) != 1) || pos != strlen(argv[2]) ||
+		params->method == 0 || params->method > 2)
+	{
+		printf("expecting first argument to be in range of [2:1]\n");
+		MPI_Abort(MPI_COMM_WORLD, 2);
+	}
+
+	if (sscanf(argv[3], "%u%n", &params->interlines, &pos) != 1 ||  pos != strlen(argv[3]))
 	{
 		printf("expecting 2st argument of unsigned type\n");
 		MPI_Abort(MPI_COMM_WORLD, 3);
 	}
 	params->row_len = (params->interlines * 8) + 9;
 
-	if ((sscanf(argv[3], "%u%n", &params->use_stoerfunktion, &pos) != 1) ||  pos != strlen(argv[3]) ||
-		(params->use_stoerfunktion > 1))
+	if ((sscanf(argv[4], "%u%n", &params->use_stoerfunktion, &pos) != 1) ||  pos != strlen(argv[4]) ||
+		 params->use_stoerfunktion == 0 || params->use_stoerfunktion > 2)
 	{
 		printf("expecting 3rd argument of boolean type (0 or 1)\n");
 		MPI_Abort(MPI_COMM_WORLD, 4);
 	}
+	params->use_stoerfunktion--;
 
-	if (sscanf(argv[4], "%lu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[4]))
+	unsigned use_iterations;
+	if (sscanf(argv[5], "%u%n", &use_iterations, &pos) != 1 ||  pos != strlen(argv[5]) ||
+					use_iterations == 0 || use_iterations > 2)
 	{
-		printf("expecting 4th argument of 64 bit unsigned type\n");
+		printf("expecting 1 or 2 for the 5-th argument\n");
 		MPI_Abort(MPI_COMM_WORLD, 5);
 	}
+	use_iterations--;
 
-	unsigned stop_after_precision_reached = (params->target_iteration == 0);
-	if (stop_after_precision_reached)
+	if (use_iterations)
 	{
-		if (argc < 5)
+		if (sscanf(argv[6], "%lu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[6]) ||
+						params->target_iteration == 0)
 		{
-			printf("expecting max residuum as a 5th argument\n");
-			MPI_Abort(MPI_COMM_WORLD, 6);
+			printf("expecting 6-th argument of 64 bit unsigned type\n");
+			MPI_Abort(MPI_COMM_WORLD, 5);
 		}
-
-		if (sscanf(argv[5], "%lf%n", &params->target_residuum, &pos) != 1 ||  pos != strlen(argv[5]))
+	}
+	else
+	{
+		params->target_iteration = 0;
+		if (sscanf(argv[6], "%lf%n", &params->target_residuum, &pos) != 1 ||  pos != strlen(argv[6]))
 		{
 			printf("max residuum should be a floating point number\n");
 			MPI_Abort(MPI_COMM_WORLD, 7);
@@ -507,16 +569,20 @@ void params_init(int argc, char** argv, Params* params)
 		if (!isnormal(params->target_residuum) || params->target_residuum <= 0)
 		{
 			printf("max residuum should be a positive floating point number\n");
-			MPI_Abort(MPI_COMM_WORLD, 7);
+			MPI_Abort(MPI_COMM_WORLD, 8);
+		}
+
+		if (params->target_residuum > 1e-1 || params->target_residuum < 1e-20)
+		{
+			printf("max residuum should be a within 1e-4 .. 1e-20\n");
+			MPI_Abort(MPI_COMM_WORLD, 9);
 		}
 	}
 
-#ifdef _OPENMP
-	params->omp_num_threads = omp_get_thread_num();
-#else
-	params->omp_num_threads = 0;
-#endif
 	params->num_chunks = 1 + (params->method == JACOBI);
+	params->h = 1.0 / (double)params->row_len;
+	params->fpisin = 0.25 * TWO_PI_SQUARE * params->h * params->h;//ist das *h*h Absicht?
+	params->pih = PI * params->h;
 }
 
 
@@ -624,7 +690,7 @@ int main(int argc, char** argv)
 
 	Result result;
 	struct timeval start_time, end_time;
-	gettimeofday(&start_time, NULL);
+	gettimeofday(&start_time, NULL); // measure time it took the the calcualtion to run
 	if (params.method == JACOBI)
 	{
 		do_jacobi(&params, &result);
@@ -636,14 +702,14 @@ int main(int argc, char** argv)
 
 	gettimeofday(&end_time, NULL);
 
-	fflush(stdout);
-	fflush(stderr);
-	usleep(500);
-
 	// show full matrix
 	//Display_Params dp = { 0, params.row_len, 0, params.row_len, 1, 1};
 
-	Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
+	// no borders
+	//Display_Params dp = { 1, params.row_len - 1, 1, params.row_len - 1, params.interlines + 1, 0 };
+
+
+	Display_Params dp = { 0, params.row_len, 0, params.row_len, params.interlines + 1, 0 };
 	display(&params, &result, &dp);
 
 #if 0
