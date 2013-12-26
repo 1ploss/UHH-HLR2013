@@ -24,17 +24,17 @@
 #endif
 //#define TEST_VALUES
 
-
-
-
+/**
+ * Describes how the Matrix is drawn.
+ */
 typedef struct
 {
-	unsigned x0;
-	unsigned x1;
-	unsigned y0;
-	unsigned y1;
-	unsigned advance;
-	int		 show_next_chunk_line;
+	unsigned x0; // first column to display
+	unsigned x1; // last column to display
+	unsigned y0; // first row to display
+	unsigned y1; // last row to display
+	unsigned advance; // how much to increment the row and column counter after a value is displayed
+	int		 show_next_chunk_line; // show a line after the rows of each task (this is mainly to ease debugging)
 } Display_Params;
 
 /**
@@ -94,9 +94,10 @@ static void init_chunk(double** chunk, const Params* params)
 	const unsigned row_len = params->row_len;
 	assert(row_len > 0);
 
-	double h = 1.0 / (double) row_len;
+	double h = params->h;
 	LOG_INIT("h is %lf\n", params->rank, h);
 
+	// zero out the chunk
 	for (unsigned y = 0; y < params->num_rows; y++)
 	{
 		memset(chunk[y], 0, row_len * sizeof(chunk[y][0]));
@@ -136,6 +137,12 @@ static void init_chunk(double** chunk, const Params* params)
 #endif
 }
 
+/**
+ * Solves the equation.
+ * This function processes rows as specified in first_row and num_rows (number of rows) parameters.
+ * It stores the matrix pointed by the src parameter as source.
+ * It stores the result in the matrix pointed to with the dest argument.
+ */
 double compute(double** const src, double** dest, const Params* params, unsigned first_row, unsigned num_rows)
 {
 	//#define LOG_COMP(...) fprintf(stderr, __VA_ARGS__);
@@ -290,7 +297,6 @@ void calculate_row_offsets(Params* params)
 	}
 }
 
-
 /**
  * Like malloc, only checks for result and exits the program on failure.
  */
@@ -340,6 +346,10 @@ void clean_up(Params* params)
 
 /**
  * Displays the matrix. Display_Params describe how the displaying is done.
+ * Rank 0 receives the rows and displays them.
+ *
+ * The way the function works is at length documented here:
+ * http://wr.informatik.uni-hamburg.de/_media/teaching/wintersemester_2013_2014/hr-1314-uebungsblatt-08-materialien.tar.gz
  */
 void display(const Params* params, const Result* result, const Display_Params* dp)
 {
@@ -379,7 +389,7 @@ void display(const Params* params, const Result* result, const Display_Params* d
 
 			for (unsigned x = dp->x0; x < dp->x1; x += dp->advance)
 			{
-				fprintf(out, "%4.4f ", row[x]);
+				fprintf(out, "%7.4f ", row[x]);
 			}
 			fprintf(out, "\n");
 		}
@@ -410,26 +420,37 @@ void display(const Params* params, const Result* result, const Display_Params* d
 	}
 }
 
+/**
+ * Function that displays stats of the program.
+ */
 void print_params(const Params* params)
 {
 	char buff[1024];
 	if (is_first_rank(params))
 	{
-		const char* methods[] = { "unknown", "gauss", "jaccobi" };
+		const char* methods[] = { "unknown", "Gauss-Seidel", "Jacobi" };
 		printf("%i: ----[general info]----:\n", params->rank);
-		printf("%i: method : %s\n", params->rank, methods[params->method]);
 		printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
 		printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
-		printf("%i: use_stoerfunktion : %i\n", params->rank, params->use_stoerfunktion);
-		printf("%i: target_residuum : %lf\n", params->rank, params->target_residuum);
-		printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
+		printf("%i: method : %s\n", params->rank, methods[params->method]);
 		printf("%i: interlines : %u\n", params->rank, params->interlines);
+		printf("%i: Stoerfunktion : %s\n", params->rank, (params->use_stoerfunktion ? "f(x,y) = 2pi^2*sin(pi*x)sin(pi*y)" : "f(x,y) = 0"));
+		printf("%i: Termination condition : %s\n", params->rank, (params->target_iteration ? "Number of iterations" : "Sufficient precision"));
+		if (params->target_iteration)
+		{
+			printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
+		}
+		else
+		{
+			printf("%i: target_residuum : %lf\n", params->rank, params->target_residuum);
+		}
 		printf("%i: row_len: %u\n", params->rank, params->row_len);
+
 		printf("%i: ----[per-rank info]----:\n", params->rank);
 		printf("%i: first_row : %u\n", params->rank, params->first_row);
 		printf("%i: num_rows : %u\n", params->rank, params->num_rows);
-		double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
 
+		double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
 		printf("%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
 					((bytes_used > (1024 * 1024)) ? bytes_used / (1024 * 1024) : bytes_used / 1024),
 					((bytes_used > (1024 * 1024)) ? 'm' : 'k'));
