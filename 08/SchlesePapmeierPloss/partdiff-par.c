@@ -304,7 +304,7 @@ static void* allocate_memory (size_t size)
 	void * mem = malloc(size);
 	if (!mem)
 	{
-		printf("Failed to allocate %lu bytes\n", size);
+		printf("Failed to allocate %lu bytes\n", (long unsigned)size);
 		MPI_Abort(MPI_COMM_WORLD, 10);
 	}
 	return mem;
@@ -392,7 +392,7 @@ void display(const Params* params, const Result* result, const Display_Params* d
 			}
 			fprintf(out, "\n");
 		}
-		fprintf(out, "max residuum is: %lf, number of iterations done: %lu\n", result->max_residuum, result->num_iterations);
+		fprintf(out, "max residuum is: %lf, number of iterations done: %llu\n", result->max_residuum, result->num_iterations);
 	}
 	else
 	{
@@ -437,7 +437,7 @@ void print_params(const Params* params)
 		printf("%i: Termination condition : %s\n", params->rank, (params->target_iteration ? "Number of iterations" : "Sufficient precision"));
 		if (params->target_iteration)
 		{
-			printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
+			printf("%i: target_iteration : %llu\n", params->rank, params->target_iteration);
 		}
 		else
 		{
@@ -460,7 +460,7 @@ void print_params(const Params* params)
 			for (unsigned j = 0; j < 3; j++)
 			{
 				MPI_Recv(buff, sizeof(buff), MPI_CHAR, i, 0, MPI_COMM_WORLD, &status);
-				printf(buff);
+				puts(buff);
 			}
 		}
 #ifdef _OPENMP
@@ -469,14 +469,14 @@ void print_params(const Params* params)
 	}
 	else
 	{
-		snprintf(buff, sizeof(buff), "%i: first_row : %u\n", params->rank, params->first_row);
+		snprintf(buff, sizeof(buff), "%i: first_row : %u", params->rank, params->first_row);
 		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 
-		snprintf(buff, sizeof(buff), "%i: num_rows : %u\n", params->rank, params->num_rows);
+		snprintf(buff, sizeof(buff), "%i: num_rows : %u", params->rank, params->num_rows);
 		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 
 		double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
-		snprintf(buff, sizeof(buff), "%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
+		snprintf(buff, sizeof(buff), "%i: chunks mem usage: : %6.3lf %cb", params->rank,
 					((bytes_used > (1024 * 1024)) ? bytes_used / (1024 * 1024) : bytes_used / 1024),
 					((bytes_used > (1024 * 1024)) ? 'm' : 'k'));
 		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
@@ -570,7 +570,7 @@ void params_init(int argc, char** argv, Params* params)
 
 	if (use_iterations)
 	{
-		if (sscanf(argv[6], "%lu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[6]) ||
+		if (sscanf(argv[6], "%llu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[6]) ||
 						params->target_iteration == 0)
 		{
 			printf("expecting 6-th argument of 64 bit unsigned type\n");

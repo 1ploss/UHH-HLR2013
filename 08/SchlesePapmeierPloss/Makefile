@@ -1,5 +1,5 @@
 CC=mpicc
-CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -lm
+CFLAGS=-std=c99 -Wall -Wextra -Wno-unknown-pragmas -ggdb -fno-strict-aliasing -lm -lmpi -lrt
 
 %-par: %-par.o gauss.o
 	$(CC) $(CFLAGS) -ggdb $? -o $@
