@@ -601,7 +601,7 @@ void params_init(int argc, char** argv, Params* params)
 	}
 
 	params->num_chunks = 1 + (params->method == JACOBI);
-	params->h = 1.0 / (double)params->row_len;
+	params->h = 1.0 / (double)(params->row_len -1);
 	params->fpisin = 0.25 * TWO_PI_SQUARE * params->h * params->h;//ist das *h*h Absicht?
 	params->pih = PI * params->h;
 }
