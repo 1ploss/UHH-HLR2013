@@ -430,6 +430,9 @@ void print_params(const Params* params)
 		const char* methods[] = { "unknown", "Gauss-Seidel", "Jacobi" };
 		printf("%i: ----[general info]----:\n", params->rank);
 		printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
+#ifdef _OPENMP
+	printf("%i: omp_num_threads : %u\n", params->rank, params->num_threads);
+#endif
 		printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
 		printf("%i: method : %s\n", params->rank, methods[params->method]);
 		printf("%i: interlines : %u\n", params->rank, params->interlines);
@@ -463,9 +466,6 @@ void print_params(const Params* params)
 				puts(buff);
 			}
 		}
-#ifdef _OPENMP
-	printf("%i: omp_num_threads : %u\n", params->rank, params->num_threads);
-#endif
 	}
 	else
 	{
