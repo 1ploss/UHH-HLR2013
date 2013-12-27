@@ -1,14 +1,13 @@
 +-------------------+------------------------------------------------------------------+
-| Bearbeitungszeit  |      10+                                                         |
+| Bearbeitungszeit  |      30+                                                         |
 +-------------------+-----------------------+----------------------+-------------------+
-| Schwierigkeit     | [ ] zu leicht         | [ ] genau richtig    | [x] zu schwehr    |
+| Schwierigkeit     | [ ] zu leicht         | [x] genau richtig    | [ ] zu schwehr    |
 +-------------------+-----------------------+----------------------+-------------------+
-| Lehrreich         | [x] wenig             | [ ] etwas            | [ ] sehr          |
+| Umfang            | [ ] zu wenig          | [ ] genau richtig    | [x] zu viel       |
 +-------------------+-----------------------+----------------------+-------------------+
-| Verstaendlichkeit | [x] grossteils unklar | [ ] teilweise unklar | [ ] verstaendlich |
+| Lehrreich         | [ ] wenig             | [x] etwas            | [ ] sehr          |
 +-------------------+-----------------------+----------------------+-------------------+
-| Kommentar         | Wenn man in der übung sagt, dass man kein Bock hat die           |
-| 		    unkommentierte  Aufgaben zu korrigieren und dann unkomentiertes    |
-| DisplayMatrix Code liefert. Es ist ehrlich gesagt zu viel zu Programieren und zu     |
-| debuggen. Die Aufgabe ist eindeutig viel.                                            |
+| Verstaendlichkeit | [ ] grossteils unklar | [ ] teilweise unklar | [x] verstaendlich |
++-------------------+-----------------------+----------------------+-------------------+
+| Kommentar         | Fuer dieses Umfang muss man bezahlt werden.                      |
 +-------------------+------------------------------------------------------------------+
