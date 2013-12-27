@@ -122,7 +122,8 @@ static void init_chunk(double** chunk, const Params* params)
 			}
 			chunk[0][row_len - 1] = 0.0;
 		}
-		else if (is_last_rank(params))
+
+		if (is_last_rank(params))
 		{
 			/* initialize bottom row */
 			for (unsigned x = 0; x < row_len; x++)
