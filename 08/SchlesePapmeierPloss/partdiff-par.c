@@ -392,7 +392,7 @@ void display(const Params* params, const Result* result, const Display_Params* d
 			}
 			fprintf(out, "\n");
 		}
-		fprintf(out, "max residuum is: %lf, number of iterations done: %llu\n", result->max_residuum, result->num_iterations);
+		fprintf(out, "max residuum is: %lf, number of iterations done: %lu\n", result->max_residuum, (long unsigned)result->num_iterations);
 	}
 	else
 	{
@@ -437,7 +437,7 @@ void print_params(const Params* params)
 		printf("%i: Termination condition : %s\n", params->rank, (params->target_iteration ? "Number of iterations" : "Sufficient precision"));
 		if (params->target_iteration)
 		{
-			printf("%i: target_iteration : %llu\n", params->rank, params->target_iteration);
+			printf("%i: target_iteration : %lu\n", params->rank, (long unsigned)params->target_iteration);
 		}
 		else
 		{
@@ -570,7 +570,7 @@ void params_init(int argc, char** argv, Params* params)
 
 	if (use_iterations)
 	{
-		if (sscanf(argv[6], "%llu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[6]) ||
+		if (sscanf(argv[6], "%lu%n", &params->target_iteration, &pos) != 1 ||  pos != strlen(argv[6]) ||
 						params->target_iteration == 0)
 		{
 			printf("expecting 6-th argument of 64 bit unsigned type\n");
