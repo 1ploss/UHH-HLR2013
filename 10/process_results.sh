@@ -8,7 +8,6 @@ class Test:
 		self.test_filename = test_filename
 		tokens = test_filename.split("_")
 		
-		
 	def __str__(self):
 		if self.complete:
 			s = ("test_filename: " + self.test_filename + "\n"
@@ -28,7 +27,9 @@ tests = []
 import glob
 test_filenames = glob.glob(results_dir + "/*.out")
 for test_filename in test_filenames:
+	
 	with open(test_filename) as test_file:
+		
 		curr_test = Test(test_filename)
 		for line in test_file:
 			#print("line: " + line);
@@ -45,6 +46,37 @@ for test_filename in test_filenames:
 				curr_test.complete = True;
 				tests.append(curr_test)
 				curr_test = Test(test_filename)
+
+
+def mean(tests):
+	max_residuum = 0;
+	time = 0.0
+	for test in tests:
+		max_residuum = max_residuum + test.max_residuum
+		time = time + test.time
+	result_test = Test(tests[0].test_filename)
+	result_test.max_residuum = max_residuum / len(tests)
+	result_test.time = time / len(tests)
+	result_test.num_tasks = tests[0].num_tasks
+	result_test.method = tests[0].method
+	result_test.num_iterations = tests[0].num_iterations
+	result_test.complete = True
+	return result_test
+
+def smooth_tests(tests_in, tests_per_job):
+	i = 0
+	tests_out = []
+	batch = []
+	for test in tests:
+		batch.append(test)
+		i = i + 1
+		if i == tests_per_job:
+			i = 0
+			tests_out.append(mean(batch))
+			to_smooth = []
+	return tests_out				
+
+tests = smooth_tests(tests, 3)
 
 for test in tests:	
 	print(test)
