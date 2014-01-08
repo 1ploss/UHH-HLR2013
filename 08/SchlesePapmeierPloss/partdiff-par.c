@@ -122,7 +122,8 @@ static void init_chunk(double** chunk, const Params* params)
 			}
 			chunk[0][row_len - 1] = 0.0;
 		}
-		else if (is_last_rank(params))
+
+		if (is_last_rank(params))
 		{
 			/* initialize bottom row */
 			for (unsigned x = 0; x < row_len; x++)
@@ -306,7 +307,7 @@ static void* allocate_memory (size_t size)
 	void * mem = malloc(size);
 	if (!mem)
 	{
-		printf("Failed to allocate %lu bytes\n", size);
+		printf("Failed to allocate %lu bytes\n", (long unsigned)size);
 		MPI_Abort(MPI_COMM_WORLD, 10);
 	}
 	return mem;
@@ -394,7 +395,7 @@ void display(const Params* params, const Result* result, const Display_Params* d
 			}
 			fprintf(out, "\n");
 		}
-		fprintf(out, "max residuum is: %lf, number of iterations done: %lu\n", result->max_residuum, result->num_iterations);
+		fprintf(out, "max residuum is: %lf, number of iterations done: %lu\n", result->max_residuum, (long unsigned)result->num_iterations);
 	}
 	else
 	{
@@ -432,6 +433,9 @@ void print_params(const Params* params)
 		const char* methods[] = { "unknown", "Gauss-Seidel", "Jacobi" };
 		printf("%i: ----[general info]----:\n", params->rank);
 		printf("%i: num_tasks : %i\n", params->rank, params->num_tasks);
+#ifdef _OPENMP
+	printf("%i: omp_num_threads : %u\n", params->rank, params->num_threads);
+#endif
 		printf("%i: num_chunks : %u\n", params->rank, params->num_chunks);
 		printf("%i: method : %s\n", params->rank, methods[params->method]);
 		printf("%i: interlines : %u\n", params->rank, params->interlines);
@@ -439,7 +443,7 @@ void print_params(const Params* params)
 		printf("%i: Termination condition : %s\n", params->rank, (params->target_iteration ? "Number of iterations" : "Sufficient precision"));
 		if (params->target_iteration)
 		{
-			printf("%i: target_iteration : %lu\n", params->rank, params->target_iteration);
+			printf("%i: target_iteration : %lu\n", params->rank, (long unsigned)params->target_iteration);
 		}
 		else
 		{
@@ -462,23 +466,20 @@ void print_params(const Params* params)
 			for (unsigned j = 0; j < 3; j++)
 			{
 				MPI_Recv(buff, sizeof(buff), MPI_CHAR, i, 0, MPI_COMM_WORLD, &status);
-				printf(buff);
+				puts(buff);
 			}
 		}
-#ifdef _OPENMP
-	printf("%i: omp_num_threads : %u\n", params->rank, params->num_threads);
-#endif
 	}
 	else
 	{
-		snprintf(buff, sizeof(buff), "%i: first_row : %u\n", params->rank, params->first_row);
+		snprintf(buff, sizeof(buff), "%i: first_row : %u", params->rank, params->first_row);
 		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 
-		snprintf(buff, sizeof(buff), "%i: num_rows : %u\n", params->rank, params->num_rows);
+		snprintf(buff, sizeof(buff), "%i: num_rows : %u", params->rank, params->num_rows);
 		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 
 		double bytes_used = params->num_chunks * params->num_rows * params->row_len * sizeof(double);
-		snprintf(buff, sizeof(buff), "%i: chunks mem usage: : %6.3lf %cb\n", params->rank,
+		snprintf(buff, sizeof(buff), "%i: chunks mem usage: : %6.3lf %cb", params->rank,
 					((bytes_used > (1024 * 1024)) ? bytes_used / (1024 * 1024) : bytes_used / 1024),
 					((bytes_used > (1024 * 1024)) ? 'm' : 'k'));
 		MPI_Send(buff, sizeof(buff), MPI_CHAR, 0, 0, MPI_COMM_WORLD);
@@ -602,7 +603,7 @@ void params_init(int argc, char** argv, Params* params)
 	}
 
 	params->num_chunks = 1 + (params->method == JACOBI);
-	params->h = 1.0 / (double)params->row_len;
+	params->h = 1.0 / (double)(params->row_len -1);
 	params->fpisin = 0.25 * TWO_PI_SQUARE * params->h * params->h;//ist das *h*h Absicht?
 	params->pih = PI * params->h;
 }
