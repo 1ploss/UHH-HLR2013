@@ -189,7 +189,9 @@ double compute(double** const src, double** dest, const Params* params, unsigned
 	return max_residuum;
 }
 
-
+/**
+ * Performs communictaion with
+ */
 void communicate_jacobi(double** chunk, const Params* params)
 {
 //#define LOG_COMM(...) fprintf(stderr, "%i: comm: " __VA_ARGS__);
